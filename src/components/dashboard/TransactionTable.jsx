@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const weekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
@@ -15,17 +15,23 @@ function fmtDateGroup(rawDate) {
 }
 
 export default function TransactionTable() {
-  const { transactions, hoveredTxId, setHoveredTx } = useVaultStore()
-  const [activeFilter, setActiveFilter] = useState('all')
+  const {
+    transactions,
+    hoveredTxId,
+    setHoveredTx,
+    ledgerContextTitle,
+    activeLedgerFilter,
+    setLedgerContextByFilter,
+  } = useVaultStore()
 
   const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
 
   const filteredTransactions = useMemo(() => {
-    if (activeFilter === 'review') return transactions.filter((tx) => tx.status === 'PENDING')
-    if (activeFilter === 'income') return transactions.filter((tx) => tx.amount > 0)
-    if (activeFilter === 'expense') return transactions.filter((tx) => tx.amount < 0)
+    if (activeLedgerFilter === 'review') return transactions.filter((tx) => tx.status === 'PENDING')
+    if (activeLedgerFilter === 'income') return transactions.filter((tx) => tx.amount > 0)
+    if (activeLedgerFilter === 'expense') return transactions.filter((tx) => tx.amount < 0)
     return transactions
-  }, [transactions, activeFilter])
+  }, [transactions, activeLedgerFilter])
 
   const groupedTransactions = useMemo(() => {
     return filteredTransactions.reduce((groups, tx) => {
@@ -46,27 +52,29 @@ export default function TransactionTable() {
     >
       {/* Header */}
       <div className="px-8 py-6 border-b border-surface-container flex flex-wrap justify-between items-center gap-3">
-        <h3 className="font-bold text-lg">데이터 원장 (Data Vault Ledger)</h3>
+        <h3 key={ledgerContextTitle} className="font-bold text-lg animate-fade-in">
+          {ledgerContextTitle}
+        </h3>
         <div className="flex flex-wrap gap-2">
           <FilterChip
             label="전체"
-            active={activeFilter === 'all'}
-            onClick={() => setActiveFilter('all')}
+            active={activeLedgerFilter === 'all'}
+            onClick={() => setLedgerContextByFilter('all')}
           />
           <FilterChip
             label={`🚨 검토 필요 (${reviewCount})`}
-            active={activeFilter === 'review'}
-            onClick={() => setActiveFilter('review')}
+            active={activeLedgerFilter === 'review'}
+            onClick={() => setLedgerContextByFilter('review')}
           />
           <FilterChip
             label="수입"
-            active={activeFilter === 'income'}
-            onClick={() => setActiveFilter('income')}
+            active={activeLedgerFilter === 'income'}
+            onClick={() => setLedgerContextByFilter('income')}
           />
           <FilterChip
             label="지출"
-            active={activeFilter === 'expense'}
-            onClick={() => setActiveFilter('expense')}
+            active={activeLedgerFilter === 'expense'}
+            onClick={() => setLedgerContextByFilter('expense')}
           />
         </div>
       </div>

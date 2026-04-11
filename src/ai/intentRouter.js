@@ -45,6 +45,34 @@ export function classifyTier1Intent(input = '') {
   return { intent: Tier1Intent.GENERAL_CHAT, text }
 }
 
+/**
+ * Tier1 intent executor
+ * - handlers를 주입받아 UI 상태/스토어 변경을 라우터 레벨에서 실행한다.
+ */
+export function handleTier1Intent(input = '', handlers = {}) {
+  const routed = classifyTier1Intent(input)
+
+  switch (routed.intent) {
+    case Tier1Intent.ROUTE_LEDGER: {
+      console.log('[Intent] ROUTE_LEDGER 트리거됨')
+      handlers.onRouteLedger?.()
+      break
+    }
+    case Tier1Intent.ANALYZE_UNCLASSIFIED: {
+      console.log('[Intent] ANALYZE_UNCLASSIFIED 트리거됨')
+      handlers.onAnalyzeUnclassified?.()
+      break
+    }
+    default: {
+      console.log('[Intent] GENERAL_CHAT 트리거됨')
+      handlers.onGeneralChat?.()
+      break
+    }
+  }
+
+  return routed
+}
+
 export function detectIntent(input = '') {
   const text = String(input).trim()
   if (!text) return { tier: 'tier1_local_router', intent: 'empty' }

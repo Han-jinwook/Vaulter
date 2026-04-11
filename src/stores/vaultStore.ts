@@ -5,6 +5,14 @@ function timeNow() {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function todayDate() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}.${m}.${day}`
+}
+
 let _id = 100
 
 type ChatRole = 'ai' | 'user'
@@ -43,14 +51,20 @@ type VaultTransaction = Transaction & {
   iconColor: string
 }
 
+type LedgerFilter = 'all' | 'review' | 'income' | 'expense'
+
 type VaultState = {
   transactions: VaultTransaction[]
   messages: ChatMessage[]
   lastLedgerDecision: LedgerDecision | null
+  ledgerContextTitle: string
+  activeLedgerFilter: LedgerFilter
   hoveredTxId: string | null
   isDragging: boolean
   isProcessing: boolean
 
+  setLedgerContextByFilter: (filter: LedgerFilter) => void
+  setLedgerAiReviewContext: () => void
   setHoveredTx: (id: string | null) => void
   setDragging: (v: boolean) => void
   simulateEmailLanding: () => void
@@ -61,6 +75,7 @@ type VaultState = {
   clearLedgerDecision: () => void
   confirmTransaction: (txId: string, category: string) => void
   processDroppedFiles: () => Promise<void>
+  simulateDocumentParsing: (documentId: string, fileType: string) => Promise<string>
 }
 
 const initialTransactions: VaultTransaction[] = [
@@ -178,9 +193,25 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   transactions: initialTransactions,
   messages: initialMessages,
   lastLedgerDecision: null,
+  ledgerContextTitle: '데이터 원장 (전체)',
+  activeLedgerFilter: 'all',
   hoveredTxId: null,
   isDragging: false,
   isProcessing: false,
+
+  setLedgerContextByFilter: (filter) => {
+    const titleMap: Record<LedgerFilter, string> = {
+      all: '데이터 원장 (전체)',
+      income: '이번 달 수입 내역',
+      expense: '이번 달 지출 내역',
+      review: '미분류/검토 대기 내역',
+    }
+    set({ activeLedgerFilter: filter, ledgerContextTitle: titleMap[filter] })
+  },
+
+  setLedgerAiReviewContext: () => {
+    set({ activeLedgerFilter: 'review', ledgerContextTitle: '🚨 AI와 함께 집중 검토 중' })
+  },
 
   setHoveredTx: (id) => set({ hoveredTxId: id }),
   setDragging: (v) => set({ isDragging: v }),
@@ -410,6 +441,54 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         },
       ],
     }))
+  },
+
+  simulateDocumentParsing: async (documentId, fileType) => {
+    await new Promise((r) => setTimeout(r, 2400))
+
+    const now = todayDate()
+    const txSeed =
+      fileType === '세무'
+        ? {
+            merchant: '국세청',
+            amount: -850000,
+            category: '세금',
+            icon: 'account_balance',
+            iconBg: '#ffe8c2',
+            iconColor: '#875100',
+          }
+        : {
+            merchant: '마장동 한우촌',
+            amount: -150000,
+            category: '식비',
+            icon: 'receipt_long',
+            iconBg: '#ffd3dc',
+            iconColor: '#7d2438',
+          }
+
+    const newTx: VaultTransaction = {
+      id: String(++_id),
+      date: now,
+      merchant: txSeed.merchant,
+      name: txSeed.merchant,
+      location: '금고 문서 파싱',
+      category: txSeed.category,
+      type: 'EXPENSE',
+      aiConfidence: 0.85,
+      status: 'PENDING',
+      isInternal: false,
+      linkedDocumentId: documentId,
+      icon: txSeed.icon,
+      iconBg: txSeed.iconBg,
+      iconColor: txSeed.iconColor,
+      amount: txSeed.amount,
+    }
+
+    set((s) => ({
+      transactions: [newTx, ...s.transactions],
+    }))
+
+    return newTx.id
   },
 }))
 

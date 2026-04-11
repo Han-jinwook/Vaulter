@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { useVaultStore } from '../../stores/vaultStore'
 
@@ -9,11 +9,19 @@ const fileTypes = [
 ]
 
 export default function FileUploadOverlay() {
-  const { closeUpload } = useUIStore()
-  const { isDragging, setDragging, processDroppedFiles } = useVaultStore()
+  const { closeUploadModal, openChatPanel } = useUIStore()
+  const {
+    isDragging,
+    setDragging,
+    simulateDocumentParsing,
+    setLedgerAiReviewContext,
+    askAboutTransaction,
+  } = useVaultStore()
+  const [isScanning, setIsScanning] = useState(false)
 
   const close = () => {
-    closeUpload()
+    if (isScanning) return
+    closeUploadModal()
     setDragging(false)
   }
 
@@ -23,11 +31,24 @@ export default function FileUploadOverlay() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  const runParsingFlow = async () => {
+    setIsScanning(true)
+    const fakeDocumentId = `vault-doc-${Date.now()}`
+    const parsedType = Date.now() % 2 === 0 ? '세무' : '영수증'
+    const txId = await simulateDocumentParsing(fakeDocumentId, parsedType)
+    setLedgerAiReviewContext()
+    openChatPanel()
+    askAboutTransaction(txId)
+    setIsScanning(false)
+    closeUploadModal()
+    setDragging(false)
+    window.alert('데이터 추출 완료! 지기방(원장)에 검토 대기 내역이 추가되었습니다.')
+  }
+
   const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    close()
-    processDroppedFiles()
+    runParsingFlow()
   }
 
   return (
@@ -61,7 +82,7 @@ export default function FileUploadOverlay() {
 
         {/* Title */}
         <h2 className="text-3xl md:text-5xl font-black text-on-surface mb-6 tracking-tight">
-          {isDragging ? '바로 여기에 놓으세요!' : '파일을 금고에 넣으세요'}
+          {isScanning ? 'AI가 문서를 스캔 중입니다...' : isDragging ? '바로 여기에 놓으세요!' : '파일을 금고에 넣으세요'}
         </h2>
 
         {/* File type badges */}
@@ -74,14 +95,16 @@ export default function FileUploadOverlay() {
           ))}
         </div>
 
-        {!isDragging && (
+        {isScanning ? (
+          <div className="flex items-center gap-3 mt-2 text-on-surface-variant">
+            <span className="w-4 h-4 border-2 border-primary/70 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-semibold">AI 스캐닝 중... 잠시만 기다려 주세요.</span>
+          </div>
+        ) : !isDragging && (
           <>
             <p className="text-on-surface-variant font-medium mb-4">또는</p>
             <button
-              onClick={() => {
-                close()
-                processDroppedFiles()
-              }}
+              onClick={runParsingFlow}
               className="bg-primary text-white py-4 px-10 rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
             >
               <span className="material-symbols-outlined">file_open</span>

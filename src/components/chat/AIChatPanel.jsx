@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
-import { classifyTier1Intent, Tier1Intent } from '../../ai/intentRouter'
+import { handleTier1Intent } from '../../ai/intentRouter'
 
 export default function AIChatPanel() {
   const {
@@ -14,6 +14,8 @@ export default function AIChatPanel() {
     isProcessing,
     acknowledgeAlert,
     resolveLedgerReview,
+    setLedgerContextByFilter,
+    setLedgerAiReviewContext,
   } = useVaultStore()
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
@@ -32,29 +34,28 @@ export default function AIChatPanel() {
     const text = input.trim()
     if (!text) return
 
-    const routed = classifyTier1Intent(text)
-
-    switch (routed.intent) {
-      case Tier1Intent.ROUTE_LEDGER: {
-        console.log('[Intent] ROUTE_LEDGER 트리거됨')
+    handleTier1Intent(text, {
+      onRouteLedger: () => {
+        setLedgerContextByFilter('all')
         navigate('/')
         window.setTimeout(() => {
           const target = document.getElementById('data-vault-ledger')
           target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }, 100)
-        break
-      }
-      case Tier1Intent.ANALYZE_UNCLASSIFIED: {
+      },
+      onAnalyzeUnclassified: () => {
         const pendingRows = transactions.filter((tx) => tx.status === 'PENDING')
-        console.log(`[Intent] ANALYZE_UNCLASSIFIED 트리거됨 (${pendingRows.length}건)`)
+        setLedgerAiReviewContext()
+        navigate('/')
+        window.setTimeout(() => {
+          const target = document.getElementById('data-vault-ledger')
+          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
+        console.log(`[Intent] PENDING ${pendingRows.length}건 집중 검토 시작`)
         pendingRows.forEach((tx) => askAboutTransaction(tx.id))
-        break
-      }
-      default: {
-        console.log('[Intent] GENERAL_CHAT 트리거됨')
-        break
-      }
-    }
+      },
+      onGeneralChat: () => {},
+    })
 
     setInput('')
   }

@@ -27,7 +27,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { isUploadOpen, isCreditModalOpen, isChatPanelOpen } = useUIStore()
+  const { isUploadModalOpen, isCreditModalOpen, isChatPanelOpen } = useUIStore()
   const { isDragging, setDragging } = useVaultStore()
   const dragCounter = useRef(0)
 
@@ -76,7 +76,7 @@ function AppShell() {
         {isChatPanelOpen && <AIChatPanel />}
       </main>
 
-      {(isUploadOpen || isDragging) && <FileUploadOverlay />}
+      {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}
       {isCreditModalOpen && <CreditChargeModal />}
     </div>
   )

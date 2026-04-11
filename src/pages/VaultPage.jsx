@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useUIStore } from '../stores/uiStore'
 
-const docs = [
-  { name: '전세계약서_원본.pdf', type: '계약서', updatedAt: '2026.04.06', status: '완료', size: '2.3 MB' },
-  { name: '차량보험_보증서.pdf', type: '보증서', updatedAt: '2026.04.02', status: '완료', size: '1.1 MB' },
-  { name: '연말정산_소득공제.zip', type: '세무', updatedAt: '2026.03.28', status: '검토 필요', size: '8.9 MB' },
-  { name: '아파트 관리비_2026-03.pdf', type: '명세서', updatedAt: '2026.03.26', status: '완료', size: '0.9 MB' },
+const initialDocs = [
+  { id: 'doc-1', name: '전세계약서_원본.pdf', type: '계약서', updatedAt: '2026.04.06', status: '완료', size: '2.3 MB', isParsing: false },
+  { id: 'doc-2', name: '차량보험_보증서.pdf', type: '보증서', updatedAt: '2026.04.02', status: '완료', size: '1.1 MB', isParsing: false },
+  { id: 'doc-3', name: '연말정산_소득공제.zip', type: '세무', updatedAt: '2026.03.28', status: '검토 필요', size: '8.9 MB', isParsing: false },
+  { id: 'doc-4', name: '아파트 관리비_2026-03.pdf', type: '명세서', updatedAt: '2026.03.26', status: '완료', size: '0.9 MB', isParsing: false },
 ]
 
 const filters = ['전체', '계약서', '보증서', '세무', '명세서']
@@ -16,9 +18,18 @@ const cardTone = {
 }
 
 export default function VaultPage() {
+  const openUploadModal = useUIStore((s) => s.openUploadModal)
+  const navigate = useNavigate()
   const [active, setActive] = useState('전체')
+  const [docs] = useState(initialDocs)
   const [openedDoc, setOpenedDoc] = useState(null)
   const visibleDocs = docs.filter((d) => active === '전체' || d.type === active)
+  const reviewCount = docs.filter((d) => d.status !== '완료').length
+
+  const handleDeposit = () => {
+    openUploadModal()
+    navigate('/')
+  }
 
   return (
     <>
@@ -29,7 +40,10 @@ export default function VaultPage() {
             <h1 className="text-3xl md:text-4xl font-extrabold mt-1 text-[#EDEDED]">원본/증빙 보관함</h1>
             <p className="text-xs text-[#595959] mt-2">당신의 가장 소중한 자산 증빙을 안전하게 암호화하여 보관합니다.</p>
           </div>
-          <button className="px-4 py-2 rounded-full bg-gradient-to-r from-[#FFD700] via-[#FFEA70] to-[#FFD700] text-[#121212] text-sm font-bold shadow-[0_0_18px_rgba(255,215,0,0.34)] hover:shadow-[0_0_28px_rgba(255,234,112,0.55)] transition-all">
+          <button
+            onClick={handleDeposit}
+            className="px-4 py-2 rounded-full bg-gradient-to-r from-[#FFD700] via-[#FFEA70] to-[#FFD700] text-[#121212] text-sm font-bold shadow-[0_0_18px_rgba(255,215,0,0.34)] hover:shadow-[0_0_28px_rgba(255,234,112,0.55)] transition-all"
+          >
             새 문서 입금
           </button>
         </div>
@@ -37,7 +51,7 @@ export default function VaultPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="rounded-2xl bg-[#232323] border border-[#26334D]/20 p-4 backdrop-blur-sm">
             <p className="text-[10px] text-[#595959] font-bold mb-1">보관 문서 수</p>
-            <p className="text-2xl font-extrabold tabular-nums text-[#EDEDED]">124건</p>
+            <p className="text-2xl font-extrabold tabular-nums text-[#EDEDED]">{docs.length}건</p>
           </div>
           <div className="rounded-2xl bg-[#232323] border border-[#26334D]/20 p-4 backdrop-blur-sm">
             <p className="text-[10px] text-[#595959] font-bold mb-1">금고 사용량</p>
@@ -51,7 +65,7 @@ export default function VaultPage() {
           </div>
           <div className="rounded-2xl bg-[#232323] border border-[#26334D]/20 p-4 backdrop-blur-sm">
             <p className="text-[10px] text-[#595959] font-bold mb-1">검토 필요 문서</p>
-            <p className="text-2xl font-extrabold tabular-nums text-[#EDEDED]">3건</p>
+            <p className="text-2xl font-extrabold tabular-nums text-[#EDEDED]">{reviewCount}건</p>
           </div>
         </div>
 
@@ -75,7 +89,7 @@ export default function VaultPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {visibleDocs.map((doc) => (
               <button
-                key={doc.name}
+                key={doc.id}
                 onClick={() => setOpenedDoc(doc)}
                 className={`text-left rounded-2xl border border-[#FFD700]/40 p-5 bg-gradient-to-br backdrop-blur-sm ${
                   cardTone[doc.type] || cardTone.명세서
@@ -90,7 +104,6 @@ export default function VaultPage() {
 
                 <p className="font-bold leading-snug min-h-[44px] text-[#EDEDED]">{doc.name}</p>
                 <p className="text-xs text-[#595959] mt-1">{doc.type} · {doc.size}</p>
-
                 <div className="mt-4 pt-3 border-t border-[#26334D]/20 flex items-center justify-between text-xs">
                   <span className="text-[#595959]">보관일</span>
                   <span className="tabular-nums text-[#EDEDED]">{doc.updatedAt}</span>
@@ -129,6 +142,7 @@ export default function VaultPage() {
           </div>
         </div>
       )}
+
     </>
   )
 }

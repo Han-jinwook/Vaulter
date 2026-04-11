@@ -2,13 +2,16 @@ import { create } from 'zustand'
 
 export const useUIStore = create((set) => ({
   isUploadOpen: false,
+  isUploadModalOpen: false,
   isCreditModalOpen: false,
   isChatPanelOpen: true,
   isLeftExpanded: true,
   isChartMode: false,
 
-  openUpload: () => set({ isUploadOpen: true }),
-  closeUpload: () => set({ isUploadOpen: false }),
+  openUpload: () => set({ isUploadOpen: true, isUploadModalOpen: true }),
+  closeUpload: () => set({ isUploadOpen: false, isUploadModalOpen: false }),
+  openUploadModal: () => set({ isUploadOpen: true, isUploadModalOpen: true }),
+  closeUploadModal: () => set({ isUploadOpen: false, isUploadModalOpen: false }),
   openCreditModal: () => set({ isCreditModalOpen: true }),
   closeCreditModal: () => set({ isCreditModalOpen: false }),
   openChatPanel: () => set({ isChatPanelOpen: true }),
