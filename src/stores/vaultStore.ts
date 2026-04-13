@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Transaction } from '../types/schema'
+import { analyzeDocumentWithGPT } from '../lib/visionAIEngine'
 
 function timeNow() {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -44,8 +45,10 @@ type LedgerDecision = {
 
 type VaultTransaction = Transaction & {
   id: string
+  createdAt: string
   name: string
   location: string
+  userMemo: string
   icon: string
   iconBg: string
   iconColor: string
@@ -59,6 +62,7 @@ type VaultState = {
   lastLedgerDecision: LedgerDecision | null
   ledgerContextTitle: string
   activeLedgerFilter: LedgerFilter
+  reviewPinnedTxIds: string[]
   hoveredTxId: string | null
   isDragging: boolean
   isProcessing: boolean
@@ -74,17 +78,30 @@ type VaultState = {
   resolveLedgerReview: (messageId: number, ledgerTxId: number, category: string) => void
   clearLedgerDecision: () => void
   confirmTransaction: (txId: string, category: string) => void
+  updateTransactionInline: (
+    txId: string,
+    patch: Partial<Pick<VaultTransaction, 'name' | 'location' | 'userMemo' | 'category' | 'amount'>>
+  ) => void
   processDroppedFiles: () => Promise<void>
-  simulateDocumentParsing: (documentId: string, fileType: string) => Promise<string>
+  analyzeDocumentWithVision: (documentId: string, file: File, fileType: string) => Promise<string>
+}
+
+function normalizeApiDate(dateText?: string | null) {
+  if (!dateText) return todayDate()
+  const m = String(dateText).match(/(\d{4})[-./](\d{2})[-./](\d{2})/)
+  if (!m) return todayDate()
+  return `${m[1]}.${m[2]}.${m[3]}`
 }
 
 const initialTransactions: VaultTransaction[] = [
   {
     id: '1',
+    createdAt: '2026-04-05T09:10:00.000Z',
     date: '2026.04.05',
     merchant: '고메 버거 키친',
     name: '고메 버거 키친',
     location: '서울, KR',
+    userMemo: '',
     category: '식비',
     type: 'EXPENSE',
     aiConfidence: 0.96,
@@ -98,10 +115,12 @@ const initialTransactions: VaultTransaction[] = [
   },
   {
     id: '2',
+    createdAt: '2026-04-04T09:10:00.000Z',
     date: '2026.04.04',
     merchant: '급여 입금',
     name: '급여 입금',
     location: 'Vaulter Corp',
+    userMemo: '',
     category: '수입',
     type: 'INCOME',
     aiConfidence: 0.99,
@@ -115,10 +134,12 @@ const initialTransactions: VaultTransaction[] = [
   },
   {
     id: '3',
+    createdAt: '2026-04-04T09:40:00.000Z',
     date: '2026.04.04',
     merchant: '카카오페이 송금',
     name: '카카오페이 송금',
     location: '김민수',
+    userMemo: '',
     category: '',
     type: 'TRANSFER',
     aiConfidence: 0.53,
@@ -132,10 +153,12 @@ const initialTransactions: VaultTransaction[] = [
   },
   {
     id: '4',
+    createdAt: '2026-04-03T09:10:00.000Z',
     date: '2026.04.03',
     merchant: '스팀 상점',
     name: '스팀 상점',
     location: '온라인 결제',
+    userMemo: '',
     category: '게임',
     type: 'EXPENSE',
     aiConfidence: 0.95,
@@ -149,10 +172,12 @@ const initialTransactions: VaultTransaction[] = [
   },
   {
     id: '5',
+    createdAt: '2026-04-02T09:10:00.000Z',
     date: '2026.04.02',
     merchant: 'Netflix 구독',
     name: 'Netflix 구독',
     location: '자동결제',
+    userMemo: '',
     category: '미디어',
     type: 'EXPENSE',
     aiConfidence: 0.91,
@@ -195,6 +220,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
   activeLedgerFilter: 'all',
+  reviewPinnedTxIds: [],
   hoveredTxId: null,
   isDragging: false,
   isProcessing: false,
@@ -206,7 +232,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       expense: '이번 달 지출 내역',
       review: '미분류/검토 대기 내역',
     }
-    set({ activeLedgerFilter: filter, ledgerContextTitle: titleMap[filter] })
+    set({
+      activeLedgerFilter: filter,
+      ledgerContextTitle: titleMap[filter],
+      reviewPinnedTxIds: filter === 'review' ? get().reviewPinnedTxIds : [],
+    })
   },
 
   setLedgerAiReviewContext: () => {
@@ -266,7 +296,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
             { label: '축의금', category: '경조사' },
             { label: '더치페이', category: '식비' },
             { label: '개인 송금', category: '이체' },
-            { label: '기타', category: '기타' },
+            { label: '직접입력…', category: '__CUSTOM__' },
           ],
           time: timeNow(),
         },
@@ -321,8 +351,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         ...s.messages.map((m) =>
           m.id === messageId ? { ...m, resolved: true } : m
         ),
-        { id: ++_id, role: 'user', type: 'text', text: category, time: timeNow() },
-        { id: ++_id, role: 'ai', type: 'text', text: `좋아요. '${category}'로 반영해둘게요.`, time: timeNow() },
       ],
     }))
   },
@@ -331,19 +359,35 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   confirmTransaction: (txId, category) => {
     const tx = get().transactions.find((t) => t.id === txId)
-    if (!tx) return
+    if (!tx || tx.status === 'CONFIRMED') return
+    const nextCategory = String(category || '').trim()
+    if (!nextCategory) return
 
     set((s) => ({
       transactions: s.transactions.map((t) =>
-        t.id === txId ? { ...t, status: 'CONFIRMED', category } : t
+        t.id === txId ? { ...t, status: 'CONFIRMED', category: nextCategory } : t
       ),
+      reviewPinnedTxIds: s.reviewPinnedTxIds.includes(txId)
+        ? s.reviewPinnedTxIds
+        : [txId, ...s.reviewPinnedTxIds],
       messages: [
         ...s.messages.map((m) =>
           m.type === 'confirm' && m.txId === Number(txId) ? { ...m, resolved: true } : m
         ),
-        { id: ++_id, role: 'user', type: 'text', text: category, time: timeNow() },
-        { id: ++_id, role: 'ai', type: 'text', text: `"${tx.name}"을(를) "${category}"(으)로 분류 완료했습니다!`, time: timeNow() },
       ],
+    }))
+  },
+
+  updateTransactionInline: (txId, patch) => {
+    set((s) => ({
+      transactions: s.transactions.map((t) => {
+        if (t.id !== txId) return t
+        const next = { ...t, ...patch }
+        if (patch.name !== undefined) {
+          next.merchant = patch.name
+        }
+        return next
+      }),
     }))
   },
 
@@ -360,10 +404,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const newTxs: VaultTransaction[] = [
       {
         id: String(++_id),
+        createdAt: new Date().toISOString(),
         date: '2026.04.05',
         merchant: '맥도날드 강남점',
         name: '맥도날드 강남점',
         location: '서울, KR',
+        userMemo: '',
         category: '식비',
         type: 'EXPENSE',
         aiConfidence: 0.94,
@@ -377,10 +423,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       },
       {
         id: String(++_id),
+        createdAt: new Date().toISOString(),
         date: '2026.04.05',
         merchant: 'GS25 편의점',
         name: 'GS25 편의점',
         location: '서울역점',
+        userMemo: '',
         category: '생활',
         type: 'EXPENSE',
         aiConfidence: 0.92,
@@ -394,10 +442,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       },
       {
         id: newTxId,
+        createdAt: new Date().toISOString(),
         date: '2026.04.05',
         merchant: '토스 송금',
         name: '토스 송금',
         location: '이영희',
+        userMemo: '',
         category: '',
         type: 'TRANSFER',
         aiConfidence: 0.57,
@@ -435,7 +485,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
             { label: '축의금', category: '경조사' },
             { label: '더치페이', category: '식비' },
             { label: '개인 송금', category: '이체' },
-            { label: '기타', category: '기타' },
+            { label: '직접입력…', category: '__CUSTOM__' },
           ],
           time: timeNow(),
         },
@@ -443,49 +493,55 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
-  simulateDocumentParsing: async (documentId, fileType) => {
-    await new Promise((r) => setTimeout(r, 2400))
+  analyzeDocumentWithVision: async (documentId, file, fileType) => {
+    const parsed = await analyzeDocumentWithGPT(file)
 
-    const now = todayDate()
-    const txSeed =
-      fileType === '세무'
-        ? {
-            merchant: '국세청',
-            amount: -850000,
-            category: '세금',
-            icon: 'account_balance',
-            iconBg: '#ffe8c2',
-            iconColor: '#875100',
-          }
-        : {
-            merchant: '마장동 한우촌',
-            amount: -150000,
-            category: '식비',
-            icon: 'receipt_long',
-            iconBg: '#ffd3dc',
-            iconColor: '#7d2438',
-          }
+    const normalizedCategory = parsed.category || (fileType === '세무' ? '세금' : '기타')
+    const type: Transaction['type'] =
+      /수입|환급|입금/.test(normalizedCategory) ? 'INCOME' : 'EXPENSE'
+    const amountAbs = Math.abs(Number(parsed.amount || 0))
+    const signedAmount = type === 'INCOME' ? amountAbs : -amountAbs
+    const isTax = /세금|국세청|공과금/.test(`${normalizedCategory} ${parsed.merchant}`)
 
     const newTx: VaultTransaction = {
       id: String(++_id),
-      date: now,
-      merchant: txSeed.merchant,
-      name: txSeed.merchant,
-      location: '금고 문서 파싱',
-      category: txSeed.category,
-      type: 'EXPENSE',
-      aiConfidence: 0.85,
+      createdAt: new Date().toISOString(),
+      date: normalizeApiDate(parsed.date),
+      merchant: parsed.merchant || '가맹점 미확인',
+      name: parsed.merchant || '가맹점 미확인',
+      location: '',
+      userMemo: '',
+      category: normalizedCategory,
+      type,
+      aiConfidence: Math.max(0, Math.min(1, Number(parsed.confidence || 0.9))),
       status: 'PENDING',
       isInternal: false,
       linkedDocumentId: documentId,
-      icon: txSeed.icon,
-      iconBg: txSeed.iconBg,
-      iconColor: txSeed.iconColor,
-      amount: txSeed.amount,
+      icon: isTax ? 'account_balance' : 'receipt_long',
+      iconBg: isTax ? '#ffe8c2' : '#ffd3dc',
+      iconColor: isTax ? '#875100' : '#7d2438',
+      amount: signedAmount || -1,
     }
 
     set((s) => ({
       transactions: [newTx, ...s.transactions],
+      messages: [
+        ...s.messages,
+        {
+          id: ++_id,
+          role: 'ai',
+          type: 'confirm',
+          text: `${newTx.date} "${newTx.name}" ₩${Math.abs(newTx.amount).toLocaleString('ko-KR')} 내역을 분류해 주세요.`,
+          txId: Number(newTx.id),
+          options: [
+            { label: '식비', category: '식비' },
+            { label: '교통비', category: '교통비' },
+            { label: '생활비', category: '생활비' },
+            { label: '직접입력…', category: '__CUSTOM__' },
+          ],
+          time: timeNow(),
+        },
+      ],
     }))
 
     return newTx.id

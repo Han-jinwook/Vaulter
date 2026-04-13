@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useVaultStore } from '../../stores/vaultStore'
 
 const weekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
@@ -11,30 +11,50 @@ function fmtAmount(n) {
 function fmtDateGroup(rawDate) {
   const [year, month, day] = String(rawDate).split('.').map(Number)
   const d = new Date(year, month - 1, day)
-  return `${month}월 ${day}일 ${weekdays[d.getDay()]}`
+  return `${String(year).slice(2)}년 ${month}월 ${day}일 ${weekdays[d.getDay()]}`
+}
+
+function dateToTs(rawDate) {
+  const [y, m, d] = String(rawDate).split('.').map(Number)
+  if (!y || !m || !d) return 0
+  return new Date(y, m - 1, d).getTime()
 }
 
 export default function TransactionTable() {
   const {
     transactions,
+    reviewPinnedTxIds,
+    updateTransactionInline,
     hoveredTxId,
     setHoveredTx,
     ledgerContextTitle,
     activeLedgerFilter,
     setLedgerContextByFilter,
   } = useVaultStore()
+  const [editingCell, setEditingCell] = useState(null)
+  const [draftValue, setDraftValue] = useState('')
 
   const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
 
   const filteredTransactions = useMemo(() => {
-    if (activeLedgerFilter === 'review') return transactions.filter((tx) => tx.status === 'PENDING')
+    if (activeLedgerFilter === 'review') {
+      return transactions.filter((tx) => tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id))
+    }
     if (activeLedgerFilter === 'income') return transactions.filter((tx) => tx.amount > 0)
     if (activeLedgerFilter === 'expense') return transactions.filter((tx) => tx.amount < 0)
     return transactions
-  }, [transactions, activeLedgerFilter])
+  }, [transactions, activeLedgerFilter, reviewPinnedTxIds])
+
+  const sortedTransactions = useMemo(() => {
+    return [...filteredTransactions].sort((a, b) => {
+      const dateDiff = dateToTs(b.date) - dateToTs(a.date)
+      if (dateDiff !== 0) return dateDiff
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    })
+  }, [filteredTransactions])
 
   const groupedTransactions = useMemo(() => {
-    return filteredTransactions.reduce((groups, tx) => {
+    return sortedTransactions.reduce((groups, tx) => {
       const last = groups[groups.length - 1]
       if (!last || last.date !== tx.date) {
         groups.push({ date: tx.date, items: [tx] })
@@ -43,7 +63,37 @@ export default function TransactionTable() {
       }
       return groups
     }, [])
-  }, [filteredTransactions])
+  }, [sortedTransactions])
+
+  const beginEdit = (txId, field, value) => {
+    setEditingCell({ txId, field })
+    setDraftValue(String(value ?? ''))
+  }
+
+  const commitEdit = () => {
+    if (!editingCell) return
+    const { txId, field } = editingCell
+    const nextRaw = draftValue.trim()
+    if (field === 'amount') {
+      const numeric = Number(nextRaw.replace(/[^\d.-]/g, ''))
+      if (!Number.isFinite(numeric) || numeric <= 0) {
+        setEditingCell(null)
+        return
+      }
+      const tx = transactions.find((item) => item.id === txId)
+      if (tx) {
+        const signed = tx.amount > 0 ? Math.abs(numeric) : -Math.abs(numeric)
+        updateTransactionInline(txId, { amount: signed })
+      }
+    } else {
+      updateTransactionInline(txId, { [field]: nextRaw })
+    }
+    setEditingCell(null)
+  }
+
+  const cancelEdit = () => setEditingCell(null)
+
+  const isEditing = (txId, field) => editingCell?.txId === txId && editingCell?.field === field
 
   return (
     <div
@@ -105,18 +155,79 @@ export default function TransactionTable() {
                         </span>
                       </div>
 
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm text-gray-900 truncate">{tx.name}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">{tx.location}</p>
+                      <div className="min-w-[180px]">
+                        {isEditing(tx.id, 'name') ? (
+                          <InlineInput
+                            value={draftValue}
+                            setValue={setDraftValue}
+                            onCommit={commitEdit}
+                            onCancel={cancelEdit}
+                          />
+                        ) : (
+                          <p
+                            onDoubleClick={() => beginEdit(tx.id, 'name', tx.name)}
+                            className="font-bold text-base text-gray-900 truncate cursor-text"
+                          >
+                            {tx.name}
+                          </p>
+                        )}
+                        {isEditing(tx.id, 'location') ? (
+                          <InlineInput
+                            value={draftValue}
+                            setValue={setDraftValue}
+                            onCommit={commitEdit}
+                            onCancel={cancelEdit}
+                          />
+                        ) : (
+                          tx.location && (
+                            <p
+                              onDoubleClick={() => beginEdit(tx.id, 'location', tx.location)}
+                              className="text-[11px] text-gray-500 mt-0.5 cursor-text"
+                            >
+                              {tx.location}
+                            </p>
+                          )
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-[140px] px-2">
+                        {isEditing(tx.id, 'userMemo') ? (
+                          <InlineInput
+                            value={draftValue}
+                            setValue={setDraftValue}
+                            onCommit={commitEdit}
+                            onCancel={cancelEdit}
+                          />
+                        ) : (
+                          <p
+                            onDoubleClick={() => beginEdit(tx.id, 'userMemo', tx.userMemo || '')}
+                            className="text-[12px] text-gray-700 cursor-text truncate"
+                          >
+                            {tx.userMemo || '메모를 더블클릭해 입력'}
+                          </p>
+                        )}
                       </div>
 
                       <div className="ml-auto flex items-center gap-2 pr-2">
-                        {tx.category ? (
-                          <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant text-[10px] rounded-full font-bold">
+                        {isEditing(tx.id, 'category') ? (
+                          <InlineInput
+                            value={draftValue}
+                            setValue={setDraftValue}
+                            onCommit={commitEdit}
+                            onCancel={cancelEdit}
+                          />
+                        ) : tx.category ? (
+                          <span
+                            onDoubleClick={() => beginEdit(tx.id, 'category', tx.category)}
+                            className="px-3 py-1.5 bg-primary/10 text-primary text-sm rounded-full font-extrabold cursor-text"
+                          >
                             {tx.category}
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[10px] rounded-full font-bold">
+                          <span
+                            onDoubleClick={() => beginEdit(tx.id, 'category', '')}
+                            className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs rounded-full font-bold cursor-text"
+                          >
                             분류 대기
                           </span>
                         )}
@@ -127,9 +238,23 @@ export default function TransactionTable() {
                         )}
                       </div>
 
-                      <div className={`text-right text-lg font-bold tabular-nums ${tx.amount > 0 ? 'text-primary' : 'text-gray-900'}`}>
-                        {fmtAmount(tx.amount)}
-                      </div>
+                      {isEditing(tx.id, 'amount') ? (
+                        <div className="w-28">
+                          <InlineInput
+                            value={draftValue}
+                            setValue={setDraftValue}
+                            onCommit={commitEdit}
+                            onCancel={cancelEdit}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          onDoubleClick={() => beginEdit(tx.id, 'amount', Math.abs(tx.amount))}
+                          className={`text-right text-lg font-bold tabular-nums cursor-text ${tx.amount > 0 ? 'text-primary' : 'text-gray-900'}`}
+                        >
+                          {fmtAmount(tx.amount)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -154,5 +279,21 @@ function FilterChip({ label, active, onClick }) {
     >
       {label}
     </button>
+  )
+}
+
+function InlineInput({ value, setValue, onCommit, onCancel }) {
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onCommit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit()
+        if (e.key === 'Escape') onCancel()
+      }}
+      className="w-full px-2 py-1 text-xs border border-primary/30 rounded-md outline-none focus:ring-2 focus:ring-primary/20"
+    />
   )
 }

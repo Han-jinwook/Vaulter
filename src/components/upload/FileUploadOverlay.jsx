@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { useVaultStore } from '../../stores/vaultStore'
 
@@ -13,11 +13,12 @@ export default function FileUploadOverlay() {
   const {
     isDragging,
     setDragging,
-    simulateDocumentParsing,
+    analyzeDocumentWithVision,
     setLedgerAiReviewContext,
     askAboutTransaction,
   } = useVaultStore()
   const [isScanning, setIsScanning] = useState(false)
+  const fileInputRef = useRef(null)
 
   const close = () => {
     if (isScanning) return
@@ -31,24 +32,35 @@ export default function FileUploadOverlay() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const runParsingFlow = async () => {
+  const runParsingFlow = async (files = []) => {
+    const selectedFiles = files.filter(Boolean)
+    if (!selectedFiles.length) return
+
     setIsScanning(true)
-    const fakeDocumentId = `vault-doc-${Date.now()}`
-    const parsedType = Date.now() % 2 === 0 ? '세무' : '영수증'
-    const txId = await simulateDocumentParsing(fakeDocumentId, parsedType)
-    setLedgerAiReviewContext()
-    openChatPanel()
-    askAboutTransaction(txId)
-    setIsScanning(false)
-    closeUploadModal()
-    setDragging(false)
-    window.alert('데이터 추출 완료! 지기방(원장)에 검토 대기 내역이 추가되었습니다.')
+    try {
+      for (const file of selectedFiles) {
+        const fakeDocumentId = `vault-doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const parsedType = /세금|국세|고지서|tax/i.test(file.name) ? '세무' : '영수증'
+        const txId = await analyzeDocumentWithVision(fakeDocumentId, file, parsedType)
+        askAboutTransaction(txId)
+      }
+      setLedgerAiReviewContext()
+      openChatPanel()
+      closeUploadModal()
+      setDragging(false)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '문서 분석 중 오류가 발생했습니다.'
+      window.alert(`분석에 실패했습니다.\n${msg}`)
+    } finally {
+      setIsScanning(false)
+    }
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    runParsingFlow()
+    const files = Array.from(e.dataTransfer?.files || [])
+    runParsingFlow(files)
   }
 
   return (
@@ -97,19 +109,31 @@ export default function FileUploadOverlay() {
 
         {isScanning ? (
           <div className="flex items-center gap-3 mt-2 text-on-surface-variant">
-            <span className="w-4 h-4 border-2 border-primary/70 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-semibold">AI 스캐닝 중... 잠시만 기다려 주세요.</span>
+          <span className="w-4 h-4 border-2 border-primary/70 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-semibold">클라우드 비전 AI가 문서를 초정밀 분석 중입니다...</span>
           </div>
         ) : !isDragging && (
           <>
             <p className="text-on-surface-variant font-medium mb-4">또는</p>
             <button
-              onClick={runParsingFlow}
+            onClick={() => fileInputRef.current?.click()}
               className="bg-primary text-white py-4 px-10 rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
             >
               <span className="material-symbols-outlined">file_open</span>
               내 기기에서 파일 선택
             </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || [])
+              runParsingFlow(files)
+              e.target.value = ''
+            }}
+          />
           </>
         )}
 

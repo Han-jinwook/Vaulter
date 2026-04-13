@@ -150,6 +150,17 @@ export default function AIChatPanel() {
 }
 
 function ChatBubble({ msg, transactions, onConfirm, onAcknowledge, onLedgerResolve }) {
+  const [isCustomInputOpen, setIsCustomInputOpen] = useState(false)
+  const [customCategory, setCustomCategory] = useState('')
+
+  const submitCustomCategory = () => {
+    const next = customCategory.trim()
+    if (!next || !msg.txId) return
+    onConfirm(String(msg.txId), next)
+    setIsCustomInputOpen(false)
+    setCustomCategory('')
+  }
+
   if (msg.type === 'processing') {
     return (
       <div className="flex flex-col gap-1 max-w-[85%] animate-fade-in">
@@ -185,25 +196,60 @@ function ChatBubble({ msg, transactions, onConfirm, onAcknowledge, onLedgerResol
   if (msg.type === 'confirm') {
     const tx = transactions.find((t) => t.id === String(msg.txId))
     const isResolved = msg.resolved || (tx && tx.status === 'CONFIRMED')
+    const options = Array.isArray(msg.options) ? msg.options : []
     return (
       <div className="flex flex-col gap-1 max-w-[85%] animate-fade-in">
         <div className="bg-surface-container-low text-on-surface p-4 rounded-2xl rounded-tl-none leading-relaxed">
           {msg.text}
         </div>
         {!isResolved ? (
-          <div className="flex flex-wrap gap-2 mt-1 ml-1">
-            {msg.options.map((opt) => (
-              <button
-                key={opt.label}
-                onClick={() => onConfirm(String(msg.txId), opt.category)}
-                className="px-3 py-1.5 bg-primary/5 text-primary text-xs font-bold rounded-lg border border-primary/15 hover:bg-primary hover:text-white transition-all duration-200 active:scale-95"
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="flex flex-wrap gap-2 mt-1 ml-1">
+              {options.map((opt) => (
+                <button
+                  key={opt.label}
+                  onClick={() => {
+                    if (opt.category === '__CUSTOM__') {
+                      setIsCustomInputOpen(true)
+                      return
+                    }
+                    onConfirm(String(msg.txId), opt.category)
+                  }}
+                  className="px-3 py-1.5 bg-primary/5 text-primary text-xs font-bold rounded-lg border border-primary/15 hover:bg-primary hover:text-white transition-all duration-200 active:scale-95"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {isCustomInputOpen && (
+              <div className="mt-2 ml-1 flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitCustomCategory()
+                    if (e.key === 'Escape') setIsCustomInputOpen(false)
+                  }}
+                  placeholder="카테고리 한 단어 입력"
+                  className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={submitCustomCategory}
+                  className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold"
+                >
+                  확인
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="ml-1 mt-1 flex items-center gap-1.5 text-[11px] text-green-600 font-medium">
+            {tx?.category && (
+              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                {tx.category}
+              </span>
+            )}
             <span className="material-symbols-outlined text-sm">check_circle</span>
             분류 완료
           </div>
