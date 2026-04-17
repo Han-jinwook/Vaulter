@@ -218,7 +218,7 @@ async function runGmailSync() {
       source: 'gmail',
       sourceMessageId: msg.id,
       merchant: String(data.merchant || from || '가맹점 미확인').trim(),
-      date: data.date || null,
+      date: data.date || date || null,
       amount: normalizedAmount,
       category: String(data.category || '기타').trim(),
       reasoning: isTinyAmount

@@ -102,7 +102,16 @@ type VaultState = {
 function normalizeApiDate(dateText?: string | null) {
   if (!dateText) return todayDate()
   const m = String(dateText).match(/(\d{4})[-./](\d{2})[-./](\d{2})/)
-  if (!m) return todayDate()
+  if (!m) {
+    const parsed = new Date(String(dateText))
+    if (!Number.isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear()
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+      const dd = String(parsed.getDate()).padStart(2, '0')
+      return `${y}.${mm}.${dd}`
+    }
+    return todayDate()
+  }
   return `${m[1]}.${m[2]}.${m[3]}`
 }
 

@@ -39,6 +39,40 @@ function parseAmount(value) {
   return Math.abs(n)
 }
 
+function detectCurrency(dataAmountRaw, sourceText) {
+  const amountText = String(dataAmountRaw || '').toUpperCase()
+  const source = String(sourceText || '').toUpperCase()
+  if (
+    amountText.includes('$') ||
+    amountText.includes('USD') ||
+    source.includes('US$') ||
+    source.includes('USD')
+  ) {
+    return 'USD'
+  }
+  return 'KRW'
+}
+
+function toKrwAmount(amount, currency) {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  if (currency === 'USD') {
+    const usdToKrw = 1350
+    return Math.round(amount * usdToKrw)
+  }
+  return Math.round(amount)
+}
+
+function normalizeMerchant(rawMerchant, sourceText) {
+  const base = String(rawMerchant || '').trim()
+  const text = String(sourceText || '').toLowerCase()
+  if (text.includes('chatgpt plus')) return 'ChatGPT Plus'
+  if (text.includes('google ai pro')) return 'Google AI Pro'
+  if (text.includes('windsurf')) return 'Windsurf'
+  if (text.includes('netflix')) return 'Netflix'
+  if (!base) return '가맹점 미확인'
+  return base
+}
+
 function normalizeCategory(rawCategory, sourceText) {
   const raw = String(rawCategory || '').trim()
   const key = raw.toLowerCase()
@@ -72,11 +106,13 @@ function normalizeCategory(rawCategory, sourceText) {
 }
 
 function normalizeModelData(data, fallbackSource) {
-  const merchant = String(data?.merchant || '').trim() || '가맹점 미확인'
+  const currency = detectCurrency(data?.amount, fallbackSource)
+  const parsedAmount = parseAmount(data?.amount)
+  const amount = toKrwAmount(parsedAmount, currency)
+  const merchant = normalizeMerchant(data?.merchant, fallbackSource)
   const dateRaw = String(data?.date || '').trim()
   const dateMatch = dateRaw.match(/(\d{4})[-./](\d{2})[-./](\d{2})/)
   const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : null
-  const amount = parseAmount(data?.amount)
   const confidence = Math.max(0, Math.min(1, Number(data?.confidence ?? 0.75)))
   const category = normalizeCategory(data?.category, `${fallbackSource}\n${merchant}`)
   const reasoningRaw = String(data?.reasoning || '').trim()
@@ -85,8 +121,14 @@ function normalizeModelData(data, fallbackSource) {
     merchant,
     date,
     amount,
+    currency,
+    originalAmount: parsedAmount,
     category,
-    reasoning: hasHangul ? reasoningRaw : `${merchant} ${category} 결제 메일 기준 자동 분류`,
+    reasoning: hasHangul
+      ? reasoningRaw
+      : currency === 'USD'
+        ? `${merchant} ${category} 결제(USD ${parsedAmount})를 원화 추정 환산하여 분류`
+        : `${merchant} ${category} 결제 메일 기준 자동 분류`,
     confidence,
   }
 }
@@ -127,11 +169,13 @@ export async function handler(event) {
     'Gmail 결제/영수증 메일에서 결제 데이터를 구조화한다.',
     '광고/푸터/개인식별성이 불필요한 정보는 무시하고 merchant/date/amount/category/reasoning/confidence를 추출한다.',
     'amount는 반드시 숫자만 반환한다. 통화기호, 쉼표, KRW 문자열을 포함하지 않는다.',
+    '통화가 달러(USD/US$/$)인 경우 반드시 명시하고, amount는 숫자만 반환한다.',
     'category는 한국어 한 단어로 반환한다. (예: 식비, 쇼핑, 구독, 서비스, 미디어, 교통, 공과금, 세금, 수입, 환급, 이체, 기타)',
     'reasoning은 한국어 1문장으로 간결하게 작성한다. 이 문장은 원장 적요에 표시된다.',
+    'merchant는 법인명보다 사용자가 체감하는 서비스명/상품명을 우선한다. 예: OpenAI OpCo, LLC 대신 ChatGPT Plus',
     '부가세 표기 문구는 세금 카테고리 근거로 사용하지 않는다.',
     '반드시 JSON 형식으로만 응답한다.',
-    '{"merchant":"","date":"YYYY-MM-DD","amount":0,"category":"","reasoning":"","confidence":0.0}',
+    '{"merchant":"","date":"YYYY-MM-DD","amount":0,"currency":"KRW|USD","category":"","reasoning":"","confidence":0.0}',
   ].join('\n')
 
   const openaiPayload = {
