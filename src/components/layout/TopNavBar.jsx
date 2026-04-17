@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import {
   clearGmailSyncTestData,
@@ -61,6 +61,16 @@ export default function TopNavBar() {
           reject(error)
         })
     })
+
+  useEffect(() => {
+    if (gmailSyncPhase !== 'connecting') return
+    const timer = window.setTimeout(() => {
+      // OAuth callback 누락/브라우저 권한 팝업 이슈로 상태가 고정될 수 있어 자동 복구한다.
+      setGmailSyncState('idle', '')
+      setIsConnectingGmail(false)
+    }, 35000)
+    return () => window.clearTimeout(timer)
+  }, [gmailSyncPhase, setGmailSyncState])
 
   const handleConnectGmail = async () => {
     if (isConnectingGmail) return
@@ -178,9 +188,7 @@ export default function TopNavBar() {
               title={`Gmail 읽기 전용 연동 · ${formatLastSync(lastGmailSyncAt)}`}
             >
               <span className="material-symbols-outlined text-base">mark_email_read</span>
-              {isConnectingGmail || gmailSyncStatus
-                ? (gmailSyncStatus || 'Gmail 연결 중...')
-                : (phaseFallbackLabel[gmailSyncPhase] || 'Gmail 연동')}
+              {(gmailSyncStatus || phaseFallbackLabel[gmailSyncPhase] || 'Gmail 연동')}
             </button>
 
             <button
