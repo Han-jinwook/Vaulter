@@ -149,9 +149,12 @@ async function broadcast(type, payload) {
 }
 
 async function runGmailSync() {
-  await broadcast('GMAIL_SYNC_STATUS', { text: 'Gmail 인증 확인 중...' })
   const auth = await dbGet(KEY_AUTH)
-  if (!auth?.accessToken) return
+  if (!auth?.accessToken) {
+    // 토큰이 없을 때는 상태를 남기지 않는다(새로고침 직후 '메일 읽는 중' 등 오표시 방지).
+    await broadcast('GMAIL_SYNC_STATUS', { text: '' })
+    return
+  }
   if (Number(auth.expiresAt || 0) <= Date.now() + 60_000) {
     await broadcast('GMAIL_SYNC_AUTH_EXPIRED', null)
     return
@@ -290,14 +293,6 @@ self.addEventListener('message', (event) => {
   }
   if (event.data?.type === 'SET_GMAIL_DIGEST_HOUR') {
     event.waitUntil(dbSet(KEY_DIGEST_HOUR, Number(event.data?.payload ?? 20)))
-  }
-})
-
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'gmail-sync') {
-    event.waitUntil(
-      runGmailSync().catch((error) => broadcast('GMAIL_SYNC_ERROR', String(error?.message || error)))
-    )
   }
 })
 

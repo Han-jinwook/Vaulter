@@ -11,3 +11,13 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </StrictMode>
 )
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      await navigator.serviceWorker.register('/sw.js')
+    } catch (error) {
+      console.warn('[GmailSync] service worker registration failed:', error)
+    }
+  })
+}
