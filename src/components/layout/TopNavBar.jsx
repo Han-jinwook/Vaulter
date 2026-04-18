@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import {
   clearGmailSyncTestData,
@@ -30,11 +30,12 @@ export default function TopNavBar() {
   const [connectState, setConnectState] = useState('idle')
   const [resetState, setResetState] = useState('idle')
   const [resetNotice, setResetNotice] = useState('')
+  const resetTimeoutRef = useRef(null)
   const isActive = (path) => location.pathname === path
 
   const isConnectingGmail =
     connectState === 'requesting_auth' || connectState === 'verifying' || connectState === 'syncing'
-  const isClearingGmail = resetState === 'resetting'
+  const isClearingGmail = resetState === 'resetting' || resetState === 'reset_done'
 
   const getConnectLabel = (state, phase) => {
     const labels = {
@@ -131,13 +132,7 @@ export default function TopNavBar() {
 
   useEffect(() => {
     if (resetState !== 'error') return
-    const timer = window.setTimeout(() => setResetState('idle'), 5000)
-    return () => window.clearTimeout(timer)
-  }, [resetState])
-
-  useEffect(() => {
-    if (resetState !== 'resetting') return
-    const timer = window.setTimeout(() => setResetState('error'), 15000)
+    const timer = window.setTimeout(() => setResetState('idle'), 4000)
     return () => window.clearTimeout(timer)
   }, [resetState])
 
@@ -195,25 +190,34 @@ export default function TopNavBar() {
     setResetNotice('')
     setResetState('resetting')
     let settled = false
+    if (resetTimeoutRef.current) {
+      window.clearTimeout(resetTimeoutRef.current)
+      resetTimeoutRef.current = null
+    }
+    resetTimeoutRef.current = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      setResetState('error')
+      setResetNotice('초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.')
+    }, 8000)
     try {
-      await withTimeout(
-        clearGmailSyncTestData(true),
-        10000,
-        'Gmail 기록 초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.'
-      )
+      await clearGmailSyncTestData(true)
+      if (settled) return
+      settled = true
       setLastGmailSyncAt(null)
       markGmailHistoryClearComplete(12000)
       setResetState('reset_done')
       setResetNotice('Gmail 테스트 기록 초기화 완료')
-      settled = true
     } catch (error) {
+      if (settled) return
+      settled = true
       clearGmailHistoryClearBadge()
       setResetState('error')
       setResetNotice(error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.')
-      settled = true
     } finally {
-      if (!settled) {
-        setResetState('error')
+      if (resetTimeoutRef.current) {
+        window.clearTimeout(resetTimeoutRef.current)
+        resetTimeoutRef.current = null
       }
     }
   }
