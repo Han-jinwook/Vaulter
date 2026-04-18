@@ -11,6 +11,7 @@ export default function AIChatPanel() {
     transactions,
     confirmTransaction,
     confirmTransactionAccount,
+    completeTransactionReview,
     askAboutTransaction,
     isProcessing,
     acknowledgeAlert,
@@ -92,6 +93,7 @@ export default function AIChatPanel() {
             transactions={transactions}
             onConfirm={confirmTransaction}
             onAccountConfirm={confirmTransactionAccount}
+            onCompleteReview={completeTransactionReview}
             onAcknowledge={acknowledgeAlert}
             onLedgerResolve={resolveLedgerReview}
           />
@@ -151,9 +153,19 @@ export default function AIChatPanel() {
   )
 }
 
-function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowledge, onLedgerResolve }) {
+function ChatBubble({
+  msg,
+  transactions,
+  onConfirm,
+  onAccountConfirm,
+  onCompleteReview,
+  onAcknowledge,
+  onLedgerResolve,
+}) {
   const [isCustomInputOpen, setIsCustomInputOpen] = useState(false)
   const [customCategory, setCustomCategory] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [accountInput, setAccountInput] = useState('')
 
   const submitCustomCategory = () => {
     const next = customCategory.trim()
@@ -263,8 +275,10 @@ function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowle
 
   if (msg.type === 'account_confirm') {
     const tx = transactions.find((t) => t.id === String(msg.txId))
-    const isResolved = msg.resolved || Boolean(tx?.account)
-    const options = Array.isArray(msg.options) ? msg.options : []
+    const isResolved = msg.resolved || (tx?.status === 'CONFIRMED' && Boolean(tx?.account))
+    const categoryOptions = Array.isArray(msg.options) ? msg.options : []
+    const accountOptions = Array.isArray(msg.accountOptions) ? msg.accountOptions : []
+    const canSubmit = Boolean(selectedCategory.trim() && accountInput.trim() && msg.txId)
     return (
       <div className="flex flex-col gap-1 max-w-[88%] animate-fade-in">
         <div className="bg-surface-container-low text-on-surface p-3 rounded-2xl rounded-tl-none leading-relaxed">
@@ -272,8 +286,9 @@ function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowle
         </div>
         {!isResolved ? (
           <>
+            <div className="ml-1 mt-1 text-[11px] font-semibold text-on-surface-variant">항목</div>
             <div className="flex flex-wrap gap-2 mt-1 ml-1">
-              {options.map((opt) => (
+              {categoryOptions.map((opt) => (
                 <button
                   key={opt.label}
                   onClick={() => {
@@ -281,9 +296,15 @@ function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowle
                       setIsCustomInputOpen(true)
                       return
                     }
-                    onAccountConfirm(String(msg.txId), opt.category)
+                    setSelectedCategory(opt.category)
+                    setIsCustomInputOpen(false)
+                    setCustomCategory('')
                   }}
-                  className="px-2.5 py-1 bg-primary/5 text-primary text-xs font-bold rounded-lg border border-primary/15 hover:bg-primary hover:text-white transition-all duration-200 active:scale-95"
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
+                    selectedCategory === opt.category
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
+                  }`}
                 >
                   {opt.label}
                 </button>
@@ -311,10 +332,9 @@ function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowle
                 <button
                   onClick={() => {
                     const next = customCategory.trim()
-                    if (!next || !msg.txId) return
-                    onAccountConfirm(String(msg.txId), next)
+                    if (!next) return
+                    setSelectedCategory(next)
                     setIsCustomInputOpen(false)
-                    setCustomCategory('')
                   }}
                   className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold"
                 >
@@ -322,14 +342,57 @@ function ChatBubble({ msg, transactions, onConfirm, onAccountConfirm, onAcknowle
                 </button>
               </div>
             )}
+            <div className="ml-1 mt-3 text-[11px] font-semibold text-on-surface-variant">계정</div>
+            {accountOptions.length ? (
+              <div className="flex flex-wrap gap-2 mt-1 ml-1">
+                {accountOptions.map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => setAccountInput(opt.category)}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
+                      accountInput === opt.category
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-2 ml-1 flex items-center gap-2">
+              <input
+                value={accountInput}
+                onChange={(e) => setAccountInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && canSubmit) {
+                    onCompleteReview(String(msg.txId), selectedCategory.trim(), accountInput.trim())
+                  }
+                }}
+                placeholder="계정명 직접입력 (예: 통장1, 현대카드)"
+                className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <button
+                onClick={() => onCompleteReview(String(msg.txId), selectedCategory.trim(), accountInput.trim())}
+                disabled={!canSubmit}
+                className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
+              >
+                확인
+              </button>
+            </div>
           </>
         ) : (
           <div className="ml-1 mt-1 flex items-center gap-1.5 text-[11px] text-green-600 font-medium">
+            {tx?.category ? (
+              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                {tx.category}
+              </span>
+            ) : null}
             <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
               {tx?.account || '계정 확인'}
             </span>
             <span className="material-symbols-outlined text-sm">check_circle</span>
-            계정 연결 완료
+            항목/계정 반영 완료
           </div>
         )}
         <span className="text-[10px] text-outline ml-1">{msg.time}</span>

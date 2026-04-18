@@ -123,6 +123,9 @@ export function buildPaymentMailQuery() {
   return [
     'after:2026/01/01',
     'before:2027/01/01',
+    '-category:promotions',
+    '-subject:"(광고)"',
+    '-subject:"[광고]"',
     '(',
     'from:coupang.com',
     'OR from:naver.com',

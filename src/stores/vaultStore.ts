@@ -38,6 +38,7 @@ type ChatMessage = {
   txId?: number
   ledgerTxId?: number
   options?: ConfirmOption[] | string[]
+  accountOptions?: ConfirmOption[]
   subtitle?: string
   credit?: string
 }
@@ -91,6 +92,7 @@ type VaultState = {
   clearLedgerDecision: () => void
   confirmTransaction: (txId: string, category: string) => void
   confirmTransactionAccount: (txId: string, account: string) => void
+  completeTransactionReview: (txId: string, category: string, account: string) => void
   updateTransactionInline: (
     txId: string,
     patch: Partial<Pick<VaultTransaction, 'name' | 'location' | 'userMemo' | 'category' | 'amount' | 'account'>>
@@ -170,11 +172,10 @@ function buildConfirmOptionsForTx(tx: VaultTransaction): ConfirmOption[] {
 function buildAccountOptions(knownAccounts: string[]): ConfirmOption[] {
   const unique = Array.from(new Set(knownAccounts.map((x) => String(x || '').trim()).filter(Boolean)))
   if (!unique.length) {
-    return [{ label: '직접입력…', category: '__CUSTOM__' }]
+    return []
   }
   return [
-    ...unique.slice(0, 4).map((account) => ({ label: account, category: account })),
-    { label: '직접입력…', category: '__CUSTOM__' },
+    ...unique.slice(0, 3).map((account) => ({ label: account, category: account })),
   ]
 }
 
@@ -529,6 +530,33 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
+  completeTransactionReview: (txId, category, account) => {
+    const nextCategory = String(category || '').trim()
+    const nextAccount = String(account || '').trim()
+    if (!nextCategory || !nextAccount) return
+    set((s) => ({
+      knownAccounts: Array.from(new Set([nextAccount, ...s.knownAccounts])),
+      transactions: s.transactions.map((t) =>
+        t.id === txId
+          ? {
+              ...t,
+              status: 'CONFIRMED',
+              category: nextCategory,
+              account: nextAccount,
+            }
+          : t
+      ),
+      reviewPinnedTxIds: s.reviewPinnedTxIds.includes(txId)
+        ? s.reviewPinnedTxIds
+        : [txId, ...s.reviewPinnedTxIds],
+      messages: s.messages.map((m) =>
+        (m.type === 'confirm' || m.type === 'account_confirm') && m.txId === Number(txId)
+          ? { ...m, resolved: true }
+          : m
+      ),
+    }))
+  },
+
   updateTransactionInline: (txId, patch) => {
     set((s) => ({
       knownAccounts:
@@ -589,25 +617,14 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       transactions: [...nextTxs, ...s.transactions],
       messages: [
         ...s.messages,
-        {
-          id: ++_id,
-          role: 'ai' as const,
-          type: 'result' as const,
-          text: `Gmail 메일 ${nextTxs.length}건을 원장에 반영했습니다.`,
-          subtitle:
-            nextTxs.length > 1
-              ? '새로 들어온 메일들을 검토 대기 항목으로 올려두었습니다'
-              : '새 메일 1건을 검토 대기 항목으로 올려두었습니다',
-          credit: '0.0',
-          time: timeNow(),
-        },
         ...reviewTargets.map((tx) => ({
           id: ++_id,
           role: 'ai' as const,
           type: 'account_confirm' as const,
-          text: `Gmail 반영: ${tx.date} "${tx.name}" ₩${Math.abs(tx.amount).toLocaleString('ko-KR')}\n어느 계정에서 결제됐나요?`,
+          text: `${tx.date} Gmail 영수증 "${tx.name}" ₩${Math.abs(tx.amount).toLocaleString('ko-KR')} 내역을 원장에 반영했어요. 항목과 계정을 함께 알려주세요.`,
           txId: Number(tx.id),
-          options: buildAccountOptions(knownAccounts),
+          options: buildConfirmOptionsForTx(tx),
+          accountOptions: buildAccountOptions(knownAccounts),
           time: timeNow(),
         })),
       ],

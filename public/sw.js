@@ -74,6 +74,11 @@ function pickHeader(headers, name) {
   return String((headers || []).find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '').trim()
 }
 
+function isAdvertisingSubject(subject) {
+  const text = String(subject || '').trim()
+  return /^\s*[\[(]광고[\])]/i.test(text)
+}
+
 function collectPayloadText(payload, collected = []) {
   if (!payload) return collected
   if (payload.mimeType === 'text/plain' && payload.body?.data) {
@@ -191,6 +196,14 @@ async function runGmailSync() {
     const snippet = String(detail.snippet || '').trim()
     const body = collectPayloadText(detail.payload).join('\n').slice(0, 7000)
 
+    if (isAdvertisingSubject(subject)) {
+      completed += 1
+      successfullyProcessedIds.push(msg.id)
+      console.info('[GmailDebug][SW] skipped ad subject:', msg.id, subject)
+      await broadcast('GMAIL_SYNC_STATUS', { text: `광고 메일 건너뜀 (${completed}/${candidates.length})` })
+      return
+    }
+
     const parseRes = await fetch('/api/analyze-email-receipt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -218,6 +231,13 @@ async function runGmailSync() {
     }
 
     const parsed = await parseRes.json()
+    if (parsed?.skipped) {
+      completed += 1
+      successfullyProcessedIds.push(msg.id)
+      console.info('[GmailDebug][SW] skipped promotional mail:', msg.id, parsed?.skipReason)
+      await broadcast('GMAIL_SYNC_STATUS', { text: `프로모션 메일 건너뜀 (${completed}/${candidates.length})` })
+      return
+    }
     const data = parsed?.data || {}
     const normalizedAmount = Math.abs(Number(data.amount || 0))
     const normalizedConfidence = Number(data.confidence || 0.8)
