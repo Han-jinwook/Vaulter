@@ -29,6 +29,7 @@ export default function TopNavBar() {
   } = useUIStore()
   const [connectState, setConnectState] = useState('idle')
   const [resetState, setResetState] = useState('idle')
+  const [resetNotice, setResetNotice] = useState('')
   const isActive = (path) => location.pathname === path
 
   const isConnectingGmail =
@@ -140,6 +141,12 @@ export default function TopNavBar() {
     return () => window.clearTimeout(timer)
   }, [resetState])
 
+  useEffect(() => {
+    if (!resetNotice) return
+    const timer = window.setTimeout(() => setResetNotice(''), 5000)
+    return () => window.clearTimeout(timer)
+  }, [resetNotice])
+
   const handleConnectGmail = async () => {
     if (isConnectingGmail) return
     setConnectState('requesting_auth')
@@ -185,7 +192,9 @@ export default function TopNavBar() {
     if (!ok) return
 
     clearGmailHistoryClearBadge()
+    setResetNotice('')
     setResetState('resetting')
+    let settled = false
     try {
       await withTimeout(
         clearGmailSyncTestData(true),
@@ -195,10 +204,17 @@ export default function TopNavBar() {
       setLastGmailSyncAt(null)
       markGmailHistoryClearComplete(12000)
       setResetState('reset_done')
+      setResetNotice('Gmail 테스트 기록 초기화 완료')
+      settled = true
     } catch (error) {
       clearGmailHistoryClearBadge()
       setResetState('error')
-      window.alert(error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.')
+      setResetNotice(error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.')
+      settled = true
+    } finally {
+      if (!settled) {
+        setResetState('error')
+      }
     }
   }
 
@@ -257,6 +273,11 @@ export default function TopNavBar() {
               <span className="material-symbols-outlined text-base">restart_alt</span>
               {getResetLabel(resetState)}
             </button>
+            {resetNotice ? (
+              <span className="hidden md:inline-block text-xs font-semibold text-primary max-w-[280px] truncate">
+                {resetNotice}
+              </span>
+            ) : null}
 
             <button className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10">
               <span className="material-symbols-outlined">notifications</span>
