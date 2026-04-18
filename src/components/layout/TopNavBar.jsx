@@ -134,6 +134,12 @@ export default function TopNavBar() {
     return () => window.clearTimeout(timer)
   }, [resetState])
 
+  useEffect(() => {
+    if (resetState !== 'resetting') return
+    const timer = window.setTimeout(() => setResetState('error'), 15000)
+    return () => window.clearTimeout(timer)
+  }, [resetState])
+
   const handleConnectGmail = async () => {
     if (isConnectingGmail) return
     setConnectState('requesting_auth')
@@ -164,7 +170,6 @@ export default function TopNavBar() {
       registration?.active?.postMessage({ type: 'GMAIL_SYNC_TICK' })
       setConnectState('syncing')
       setGmailSyncState('reading', '')
-      window.alert('Gmail 읽기 전용 연동이 완료되었습니다. 이제 결제 메일을 조용히 정리합니다.')
     } catch (error) {
       setConnectState('error')
       setGmailSyncState('error', 'Gmail 연동 실패')
@@ -190,7 +195,6 @@ export default function TopNavBar() {
       setLastGmailSyncAt(null)
       markGmailHistoryClearComplete(12000)
       setResetState('reset_done')
-      window.alert('Gmail 테스트 기록 초기화가 완료되었습니다. 마지막 동기화 시각도 초기화되었습니다.')
     } catch (error) {
       clearGmailHistoryClearBadge()
       setResetState('error')
