@@ -133,17 +133,81 @@ function normalizeModelData(data, fallbackSource) {
   }
 }
 
+function pickKnownMerchant(sourceText) {
+  const text = String(sourceText || '').toLowerCase()
+  if (text.includes('chatgpt plus')) return 'ChatGPT Plus'
+  if (text.includes('openai')) return 'OpenAI'
+  if (text.includes('google ai pro')) return 'Google AI Pro'
+  if (text.includes('google one')) return 'Google One'
+  if (text.includes('netflix')) return 'Netflix'
+  if (text.includes('youtube')) return 'YouTube'
+  if (text.includes('coupang')) return '쿠팡'
+  if (text.includes('woowahan') || text.includes('배달의민족')) return '배달의민족'
+  if (text.includes('naver')) return '네이버'
+  return ''
+}
+
+function extractDateFromText(sourceText) {
+  const text = String(sourceText || '')
+  const m = text.match(/(20\d{2})[-./년]\s*(\d{1,2})[-./월]\s*(\d{1,2})/)
+  if (!m) return null
+  return `${m[1]}-${String(Number(m[2])).padStart(2, '0')}-${String(Number(m[3])).padStart(2, '0')}`
+}
+
+function extractAmountFromText(sourceText) {
+  const text = String(sourceText || '')
+  const krwMatches = Array.from(text.matchAll(/(?:₩|KRW\s*|원\s*)([\d,]+(?:\.\d+)?)/gi))
+    .map((m) => Math.round(Number(String(m[1] || '').replace(/,/g, ''))))
+    .filter((n) => Number.isFinite(n) && n > 0)
+  if (krwMatches.length) {
+    return { amount: Math.max(...krwMatches), currency: 'KRW' }
+  }
+
+  const usdMatches = Array.from(text.matchAll(/(?:US\$|\$|USD\s*)([\d,]+(?:\.\d+)?)/gi))
+    .map((m) => Number(String(m[1] || '').replace(/,/g, '')))
+    .filter((n) => Number.isFinite(n) && n > 0)
+  if (usdMatches.length) {
+    return { amount: Math.max(...usdMatches), currency: 'USD' }
+  }
+
+  const genericMatches = Array.from(text.matchAll(/([\d,]{3,})(?:원)?/g))
+    .map((m) => Math.round(Number(String(m[1] || '').replace(/,/g, ''))))
+    .filter((n) => Number.isFinite(n) && n >= 100)
+  if (genericMatches.length) {
+    return { amount: Math.max(...genericMatches), currency: 'KRW' }
+  }
+
+  return { amount: 0, currency: 'KRW' }
+}
+
+function heuristicParseEmail(sourceText) {
+  const merchant = pickKnownMerchant(sourceText) || normalizeMerchant('', sourceText)
+  const { amount: originalAmount, currency } = extractAmountFromText(sourceText)
+  const amount = toKrwAmount(originalAmount, currency)
+  const date = extractDateFromText(sourceText)
+  const category = normalizeCategory('', `${sourceText}\n${merchant}`)
+
+  return {
+    merchant,
+    date,
+    amount,
+    currency,
+    originalAmount,
+    category,
+    reasoning:
+      amount > 0
+        ? `${merchant} 결제 메일 형식과 금액 패턴을 기준으로 자동 분류`
+        : `${merchant} 결제 메일로 추정되지만 금액 확인이 필요합니다`,
+    confidence: amount > 0 ? 0.56 : 0.34,
+  }
+}
+
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: CORS_HEADERS, body: '' }
   }
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' })
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    return json(503, { error: 'OPENAI_API_KEY is not configured' })
   }
 
   let requestBody
@@ -162,6 +226,15 @@ export async function handler(event) {
   const sourceText = [subject, from, date, snippet, body].join('\n').trim()
   if (!sourceText) {
     return json(400, { error: 'Email text payload is empty' })
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return json(200, {
+      ok: true,
+      data: heuristicParseEmail(sourceText),
+      fallback: 'heuristic',
+    })
   }
 
   const systemPrompt = [

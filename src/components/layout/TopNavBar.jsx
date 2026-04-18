@@ -15,48 +15,64 @@ const navItems = [
   { path: '/vault', desktopLabel: '비밀금고', mobileLabel: '금고' },
 ]
 
+// 연동 버튼은 connectState 단일 상태머신으로만 라벨을 결정한다.
+// gmailSyncPhase(전역)는 보조 시그널로만 사용하며, 라벨 문구에 직접 개입하지 않는다.
+const CONNECT_LABELS = {
+  idle: 'Gmail 연동',
+  requesting_auth: '권한 요청 중...',
+  verifying: '연결 확인 중...',
+  syncing: '메일 가져오는 중...',
+  success: '동기화 완료',
+  error: '연동 오류',
+}
+
+const CONNECT_HARD_TIMEOUT_MS = 25_000
+const OAUTH_STEP_TIMEOUT_MS = 10_000
+
 export default function TopNavBar() {
   const location = useLocation()
   const {
     openCreditModal,
     gmailSyncPhase,
     lastGmailSyncAt,
-    gmailHistoryClearedUntil,
     setGmailSyncState,
     setLastGmailSyncAt,
-    markGmailHistoryClearComplete,
     clearGmailHistoryClearBadge,
   } = useUIStore()
   const [connectState, setConnectState] = useState('idle')
   const [resetState, setResetState] = useState('idle')
-  const [resetNotice, setResetNotice] = useState('')
+  const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
   const resetTimeoutRef = useRef(null)
+  const connectTimeoutRef = useRef(null)
   const isActive = (path) => location.pathname === path
+  const connectLabel = CONNECT_LABELS[connectState] || CONNECT_LABELS.idle
 
   const isConnectingGmail =
     connectState === 'requesting_auth' || connectState === 'verifying' || connectState === 'syncing'
-  const isClearingGmail = resetState === 'resetting' || resetState === 'reset_done'
+  const isClearingGmail = resetState === 'resetting'
 
-  const getConnectLabel = (state, phase) => {
-    const labels = {
-      idle: 'Gmail 연동',
-      requesting_auth: '권한 요청 중...',
-      verifying: '연결 확인 중...',
-      syncing: phase === 'parsing' ? '메일 분석 중...' : '메일 가져오는 중...',
-      success: '동기화 완료',
-      error: '연동 오류',
+  // setTimeout은 백그라운드 탭에서 스로틀될 수 있어 setInterval + performance.now() 폴링 방식으로 전환.
+  // 1초 간격으로 경과 시간을 체크하기 때문에 OAuth 팝업이 포커스를 가져가도 비교적 안정적으로 발화한다.
+  const clearConnectTimer = () => {
+    if (connectTimeoutRef.current) {
+      window.clearInterval(connectTimeoutRef.current.intervalId)
+      connectTimeoutRef.current = null
     }
-    return labels[state] || labels.idle
   }
 
-  const getResetLabel = (state) => {
-    const labels = {
-      idle: 'Gmail 기록 초기화',
-      resetting: '초기화 중...',
-      reset_done: '초기화 완료',
-      error: '초기화 실패',
-    }
-    return labels[state] || labels.idle
+  const armConnectHardTimeout = () => {
+    clearConnectTimer()
+    const startedAt = performance.now()
+    const intervalId = window.setInterval(() => {
+      const elapsed = performance.now() - startedAt
+      if (elapsed < CONNECT_HARD_TIMEOUT_MS) return
+      console.info('[GmailConnect] hard timeout fired', { elapsedMs: Math.round(elapsed) })
+      clearConnectTimer()
+      setConnectState('error')
+      setGmailSyncState('error', 'Gmail 연동 지연됨')
+      setToast({ type: 'error', message: 'Gmail 연동이 지연되어 취소되었습니다. 다시 시도해 주세요.' })
+    }, 1000)
+    connectTimeoutRef.current = { intervalId, startedAt }
   }
 
   const formatLastSync = (timestamp) => {
@@ -83,52 +99,66 @@ export default function TopNavBar() {
         })
     })
 
+  // gmailSyncPhase는 보조 시그널: 성공/에러/동기화 중 상태만 connectState로 반영.
+  // 라벨 자체는 항상 connectState 기반으로 그려진다.
   useEffect(() => {
-    if (!gmailHistoryClearedUntil || Date.now() >= gmailHistoryClearedUntil) return
-    setResetState('reset_done')
-    const delay = gmailHistoryClearedUntil - Date.now()
-    const id = window.setTimeout(() => {
-      clearGmailHistoryClearBadge()
-      setResetState('idle')
-    }, delay)
-    return () => window.clearTimeout(id)
-  }, [gmailHistoryClearedUntil, clearGmailHistoryClearBadge])
-
-  useEffect(() => {
-    if (connectState !== 'requesting_auth' && connectState !== 'verifying') return
-    const id = window.setTimeout(() => {
-      setConnectState('error')
-      setGmailSyncState('error', 'Gmail 연동 지연됨')
-    }, 20_000)
-    return () => window.clearTimeout(id)
-  }, [connectState, setGmailSyncState])
-
-  useEffect(() => {
-    if (connectState !== 'syncing') return
-    const timer = window.setTimeout(() => {
-      setConnectState('idle')
-      setGmailSyncState('idle', '')
-    }, 35000)
-    return () => window.clearTimeout(timer)
-  }, [connectState, setGmailSyncState])
-
-  useEffect(() => {
+    if (connectState === 'requesting_auth' || connectState === 'verifying') {
+      return undefined
+    }
     if (gmailSyncPhase === 'reading' || gmailSyncPhase === 'parsing') {
-      setConnectState('syncing')
-      return
+      setConnectState((prev) => (prev === 'syncing' ? prev : 'syncing'))
+      return undefined
     }
     if (gmailSyncPhase === 'success') {
+      clearConnectTimer()
       setConnectState('success')
       const timer = window.setTimeout(() => setConnectState('idle'), 5000)
       return () => window.clearTimeout(timer)
     }
     if (gmailSyncPhase === 'error') {
+      clearConnectTimer()
       setConnectState('error')
       const timer = window.setTimeout(() => setConnectState('idle'), 6000)
       return () => window.clearTimeout(timer)
     }
     return undefined
-  }, [gmailSyncPhase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectState, gmailSyncPhase])
+
+  // HMR/재마운트 이후에도 requesting_auth, verifying 상태면 하드 타임아웃 가드를 다시 장착한다.
+  useEffect(() => {
+    if (connectState === 'requesting_auth' || connectState === 'verifying') {
+      if (!connectTimeoutRef.current) {
+        armConnectHardTimeout()
+      }
+      return undefined
+    }
+    if (connectState === 'idle' || connectState === 'success' || connectState === 'error') {
+      clearConnectTimer()
+    }
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectState])
+
+  // syncing 상태가 서비스워커 이벤트 없이 너무 오래 지속되는 경우 안전 복귀.
+  useEffect(() => {
+    if (connectState !== 'syncing') return
+    const timer = window.setTimeout(() => {
+      console.info('[GmailConnect] syncing watchdog → idle')
+      setConnectState('idle')
+      setGmailSyncState('idle', '')
+    }, 35_000)
+    return () => window.clearTimeout(timer)
+  }, [connectState, setGmailSyncState])
+
+  // 상태 전이 가시화: connectState / gmailSyncPhase 가 어떤 순서로 바뀌는지 콘솔에 실시간 출력.
+  useEffect(() => {
+    console.info('[GmailConnect] state', { connectState, gmailSyncPhase })
+  }, [connectState, gmailSyncPhase])
+
+  useEffect(() => {
+    console.info('[GmailConnect] render label', { connectState, connectLabel, gmailSyncPhase })
+  }, [connectLabel, connectState, gmailSyncPhase])
 
   useEffect(() => {
     if (resetState !== 'error') return
@@ -137,57 +167,100 @@ export default function TopNavBar() {
   }, [resetState])
 
   useEffect(() => {
-    if (!resetNotice) return
-    const timer = window.setTimeout(() => setResetNotice(''), 5000)
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 3500)
     return () => window.clearTimeout(timer)
-  }, [resetNotice])
+  }, [toast])
+
+  useEffect(() => {
+    return () => {
+      clearConnectTimer()
+      if (resetTimeoutRef.current) {
+        window.clearTimeout(resetTimeoutRef.current)
+        resetTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   const handleConnectGmail = async () => {
     if (isConnectingGmail) return
+    console.info('[GmailConnect] enter handleConnectGmail')
+    setToast(null)
     setConnectState('requesting_auth')
     setGmailSyncState('connecting', '')
+    armConnectHardTimeout()
     try {
       const token = await withTimeout(
         connectGmailReadonly(),
-        10000,
+        OAUTH_STEP_TIMEOUT_MS,
         '권한 요청이 지연되고 있습니다. 팝업 차단을 해제하고 다시 시도해 주세요.'
       )
+      console.info('[GmailConnect] oauth callback ok')
       setConnectState('verifying')
-      const registration = await withTimeout(
-        (async () => {
-          await validateGmailReadonlyAccess(token.accessToken)
-          await setDigestHourPreference(20)
-          if (Notification.permission === 'default') {
-            await Promise.race([
-              Notification.requestPermission(),
-              new Promise((resolve) => window.setTimeout(() => resolve('default'), 8000)),
-            ])
-          }
-          return navigator.serviceWorker?.ready ?? Promise.resolve(null)
-        })(),
-        10000,
-        'Gmail 연결 확인이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.'
+
+      // ───────── verifying 단계를 스텝별로 분해 + 자체 타임아웃 + 로그 ─────────
+      console.info('[GmailConnect] step: validate start')
+      await withTimeout(
+        validateGmailReadonlyAccess(token.accessToken),
+        8_000,
+        'Gmail 프로필 확인이 지연되고 있습니다.'
       )
-      registration?.active?.postMessage({ type: 'SET_GMAIL_DIGEST_HOUR', payload: 20 })
-      registration?.active?.postMessage({ type: 'GMAIL_SYNC_TICK' })
+      console.info('[GmailConnect] step: validate ok')
+
+      console.info('[GmailConnect] step: digestPref start')
+      await withTimeout(setDigestHourPreference(20), 3_000, 'IndexedDB 쓰기가 지연되고 있습니다.')
+      console.info('[GmailConnect] step: digestPref ok')
+
+      if (Notification.permission === 'default') {
+        console.info('[GmailConnect] step: notif start')
+        await Promise.race([
+          Notification.requestPermission(),
+          new Promise((resolve) => window.setTimeout(() => resolve('default'), 5_000)),
+        ])
+        console.info('[GmailConnect] step: notif ok', { permission: Notification.permission })
+      } else {
+        console.info('[GmailConnect] step: notif skip', { permission: Notification.permission })
+      }
+
+      console.info('[GmailConnect] step: swReady start')
+      let registration = null
+      try {
+        registration = await Promise.race([
+          navigator.serviceWorker?.ready ?? Promise.resolve(null),
+          new Promise((resolve) => window.setTimeout(() => resolve(null), 3_000)),
+        ])
+        console.info('[GmailConnect] step: swReady ok', { hasActive: Boolean(registration?.active) })
+      } catch (swError) {
+        console.info('[GmailConnect] step: swReady fail', swError)
+        registration = null
+      }
+
+      if (registration?.active) {
+        registration.active.postMessage({ type: 'SET_GMAIL_DIGEST_HOUR', payload: 20 })
+        registration.active.postMessage({ type: 'GMAIL_SYNC_TICK' })
+        console.info('[GmailConnect] step: sw messages posted')
+      } else {
+        console.info('[GmailConnect] step: sw messages skipped (no active worker)')
+      }
+      // ─────────────────────────────────────────────────────────────────────
+      clearConnectTimer()
       setConnectState('syncing')
       setGmailSyncState('reading', '')
+      setToast({ type: 'success', message: 'Gmail 연동 완료. 메일을 가져오는 중입니다.' })
     } catch (error) {
+      console.info('[GmailConnect] failure', error)
+      clearConnectTimer()
       setConnectState('error')
       setGmailSyncState('error', 'Gmail 연동 실패')
-      window.alert(error instanceof Error ? error.message : 'Gmail 연동 중 오류가 발생했습니다.')
+      const message = error instanceof Error ? error.message : 'Gmail 연동 중 오류가 발생했습니다.'
+      setToast({ type: 'error', message })
     }
   }
 
   const handleResetGmailTestData = async () => {
     if (isClearingGmail) return
-    const ok = window.confirm(
-      'Gmail 테스트 기록(읽은 메일 ID/일일 카운트/대기 큐)을 초기화할까요?\nOAuth 연동 정보는 유지됩니다.'
-    )
-    if (!ok) return
-
     clearGmailHistoryClearBadge()
-    setResetNotice('')
+    setToast(null)
     setResetState('resetting')
     let settled = false
     if (resetTimeoutRef.current) {
@@ -198,22 +271,24 @@ export default function TopNavBar() {
       if (settled) return
       settled = true
       setResetState('error')
-      setResetNotice('초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.')
+      setToast({ type: 'error', message: '초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.' })
     }, 8000)
     try {
       await clearGmailSyncTestData(true)
       if (settled) return
       settled = true
       setLastGmailSyncAt(null)
-      markGmailHistoryClearComplete(12000)
-      setResetState('reset_done')
-      setResetNotice('Gmail 테스트 기록 초기화 완료')
+      setResetState('idle')
+      setToast({ type: 'success', message: 'Gmail 테스트 기록 초기화 완료' })
     } catch (error) {
       if (settled) return
       settled = true
       clearGmailHistoryClearBadge()
       setResetState('error')
-      setResetNotice(error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.')
+      setToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.',
+      })
     } finally {
       if (resetTimeoutRef.current) {
         window.clearTimeout(resetTimeoutRef.current)
@@ -259,13 +334,16 @@ export default function TopNavBar() {
             </button>
 
             <button
+              key={`gmail-connect-${connectState}`}
               onClick={handleConnectGmail}
               disabled={isConnectingGmail}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 md:px-4 py-1.5 rounded-full font-bold text-xs md:text-sm cursor-pointer transition-colors bg-surface-container text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
               title={`Gmail 읽기 전용 연동 · ${formatLastSync(lastGmailSyncAt)}`}
+              data-connect-state={connectState}
+              data-connect-label={connectLabel}
             >
               <span className="material-symbols-outlined text-base">mark_email_read</span>
-              {getConnectLabel(connectState, gmailSyncPhase)}
+              {connectLabel}
             </button>
 
             <button
@@ -275,13 +353,8 @@ export default function TopNavBar() {
               title="Gmail 테스트 기록 초기화"
             >
               <span className="material-symbols-outlined text-base">restart_alt</span>
-              {getResetLabel(resetState)}
+              Gmail 기록 초기화
             </button>
-            {resetNotice ? (
-              <span className="hidden md:inline-block text-xs font-semibold text-primary max-w-[280px] truncate">
-                {resetNotice}
-              </span>
-            ) : null}
 
             <button className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10">
               <span className="material-symbols-outlined">notifications</span>
@@ -313,6 +386,17 @@ export default function TopNavBar() {
           ))}
         </nav>
       </div>
+      {toast ? (
+        <div className="fixed top-24 right-6 z-[60]">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-lg text-sm font-semibold ${
+              toast.type === 'error' ? 'bg-[#7a1a1a] text-white' : 'bg-[#1e5f2d] text-white'
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
     </header>
   )
 }

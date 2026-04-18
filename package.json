@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "dev:netlify": "netlify dev --target-port 5173",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vite build && node scripts/write-dist-redirects.mjs",
+    "preview": "vite preview",
+    "postinstall": "node scripts/fix-netlify-wait-port.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.102.1",
@@ -21,6 +22,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@netlify/vite-plugin": "^2.11.5",
     "@tailwindcss/vite": "^4.2.2",
     "@vitejs/plugin-react": "^6.0.1",
     "netlify-cli": "^24.11.1",

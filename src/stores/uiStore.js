@@ -10,6 +10,8 @@ export const useUIStore = create((set) => ({
   gmailSyncPhase: 'idle',
   gmailSyncStatus: '',
   lastGmailSyncAt: null,
+  /** Gmail 기록 초기화 완료 배지 만료 시각(ms). remount에도 유지되도록 스토어에 둔다. */
+  gmailHistoryClearedUntil: null,
 
   openUpload: () => set({ isUploadOpen: true, isUploadModalOpen: true }),
   closeUpload: () => set({ isUploadOpen: false, isUploadModalOpen: false }),
@@ -33,4 +35,9 @@ export const useUIStore = create((set) => ({
       gmailSyncPhase: status ? 'reading' : 'idle',
     }),
   setLastGmailSyncAt: (timestamp) => set({ lastGmailSyncAt: timestamp || null }),
+
+  markGmailHistoryClearComplete: (durationMs = 12000) =>
+    set({ gmailHistoryClearedUntil: Date.now() + Math.max(3000, durationMs) }),
+
+  clearGmailHistoryClearBadge: () => set({ gmailHistoryClearedUntil: null }),
 }))

@@ -589,6 +589,18 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       transactions: [...nextTxs, ...s.transactions],
       messages: [
         ...s.messages,
+        {
+          id: ++_id,
+          role: 'ai' as const,
+          type: 'result' as const,
+          text: `Gmail 메일 ${nextTxs.length}건을 원장에 반영했습니다.`,
+          subtitle:
+            nextTxs.length > 1
+              ? '새로 들어온 메일들을 검토 대기 항목으로 올려두었습니다'
+              : '새 메일 1건을 검토 대기 항목으로 올려두었습니다',
+          credit: '0.0',
+          time: timeNow(),
+        },
         ...reviewTargets.map((tx) => ({
           id: ++_id,
           role: 'ai' as const,

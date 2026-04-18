@@ -207,7 +207,13 @@ async function runGmailSync() {
     if (!parseRes.ok) {
       const detail = await parseRes.text()
       console.warn('[GmailDebug][SW] parse failed:', msg.id, parseRes.status, detail)
-      await broadcast('GMAIL_SYNC_ERROR', `[${msg.id}] parse failed ${parseRes.status}`)
+      await broadcast('GMAIL_SYNC_ERROR', {
+        kind: 'parse_failed',
+        sourceMessageId: msg.id,
+        status: parseRes.status,
+        message: `[${msg.id}] parse failed ${parseRes.status}`,
+        detail,
+      })
       return
     }
 
@@ -258,7 +264,11 @@ async function runGmailSync() {
       try {
         await parseOneMessage(candidates[idx])
       } catch (error) {
-        await broadcast('GMAIL_SYNC_ERROR', `[${candidates[idx]?.id}] ${String(error?.message || error)}`)
+        await broadcast('GMAIL_SYNC_ERROR', {
+          kind: 'message_failed',
+          sourceMessageId: candidates[idx]?.id || null,
+          message: `[${candidates[idx]?.id}] ${String(error?.message || error)}`,
+        })
       }
     }
   })
@@ -288,7 +298,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'GMAIL_SYNC_TICK') {
     event.waitUntil(
-      runGmailSync().catch((error) => broadcast('GMAIL_SYNC_ERROR', String(error?.message || error)))
+      runGmailSync().catch((error) =>
+        broadcast('GMAIL_SYNC_ERROR', {
+          kind: 'sync_failed',
+          message: String(error?.message || error),
+        })
+      )
     )
   }
   if (event.data?.type === 'SET_GMAIL_DIGEST_HOUR') {

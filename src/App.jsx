@@ -79,11 +79,6 @@ function AppShell() {
   }, [syncPendingFromBackgroundQueue])
 
   useEffect(() => {
-    const postSyncTick = async () => {
-      const registration = await navigator.serviceWorker?.ready
-      registration?.active?.postMessage({ type: 'GMAIL_SYNC_TICK' })
-    }
-
     const derivePhaseFromStatus = (text) => {
       if (!text) return 'idle'
       if (text.includes('권한') || text.includes('연결')) return 'connecting'
@@ -147,8 +142,16 @@ function AppShell() {
         }
       }
       if (type === 'GMAIL_SYNC_ERROR') {
-        console.warn('[GmailSync] service worker error:', event?.data?.payload)
-        setTransientStatus('Gmail 동기화 오류', 8000, 'error')
+        const payload = event?.data?.payload
+        const normalized =
+          payload && typeof payload === 'object'
+            ? payload
+            : { kind: 'sync_failed', message: String(payload || 'Gmail 동기화 오류') }
+        console.warn('[GmailSync] service worker error:', normalized)
+        if (normalized.kind === 'parse_failed') {
+          return
+        }
+        setTransientStatus(String(normalized.message || 'Gmail 동기화 오류'), 8000, 'error')
       }
       if (type === 'GMAIL_SYNC_AUTH_EXPIRED') {
         console.info('[GmailSync] auth expired; reconnect Gmail is required')
@@ -158,18 +161,9 @@ function AppShell() {
     }
 
     navigator.serviceWorker?.addEventListener('message', onSwMessage)
-    const timer = window.setInterval(() => {
-      postSyncTick().catch(() => {})
-    }, 15 * 60 * 1000)
-
-    // Run once shortly after app boot.
-    window.setTimeout(() => {
-      postSyncTick().catch(() => {})
-    }, 3000)
 
     return () => {
       navigator.serviceWorker?.removeEventListener('message', onSwMessage)
-      window.clearInterval(timer)
       clearStatusTimer()
     }
   }, [ingestBackgroundParsedEntries, setGmailSyncState, setLastGmailSyncAt])
