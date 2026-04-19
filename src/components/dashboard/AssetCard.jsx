@@ -121,18 +121,28 @@ export default function AssetCard({ isExpanded = true }) {
         className="mt-8 relative z-10 w-full bg-gradient-to-r from-primary to-primary-dim text-white py-5 px-6 rounded-2xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-shadow duration-300 hover:shadow-xl hover:shadow-primary/30 cursor-pointer"
       >
         {hovered ? (
-          <div className="flex items-center justify-center gap-2.5 h-6 animate-fade-in">
-            <span className="material-symbols-outlined text-xl">folder_open</span>
-            <span>클릭하거나 파일을 여기로 드래그하세요</span>
+          <div className="animate-fade-in">
+            <div className="flex items-center justify-center gap-2.5 h-6">
+              <span className="material-symbols-outlined text-xl">folder_open</span>
+              <span>클릭하거나 파일을 여기로 드래그하세요</span>
+            </div>
+            <div className="mt-2 text-[11px] font-medium text-white/85">
+              이미지, CSV, XLS/XLSX, 텍스트 PDF 지원
+            </div>
           </div>
         ) : (
-          <div className="h-6 overflow-hidden relative">
-            <div key={idx} className="flex items-center justify-center gap-2.5 h-6 animate-vault-text">
-              <span>{cur.emoji}</span>
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-white/60 text-lg">add</span>
-                {cur.text}
-              </span>
+          <div>
+            <div className="h-6 overflow-hidden relative">
+              <div key={idx} className="flex items-center justify-center gap-2.5 h-6 animate-vault-text">
+                <span>{cur.emoji}</span>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-white/60 text-lg">add</span>
+                  {cur.text}
+                </span>
+              </div>
+            </div>
+            <div className="mt-2 text-[11px] font-medium text-white/85">
+              이미지, CSV, XLS/XLSX, 텍스트 PDF 지원
             </div>
           </div>
         )}

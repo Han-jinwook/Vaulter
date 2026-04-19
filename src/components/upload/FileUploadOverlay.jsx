@@ -8,7 +8,7 @@ import { detectUploadFileKind, extractLocalDocument } from '../../lib/documentPa
 const fileTypes = [
   { icon: 'picture_as_pdf', label: 'PDF', color: 'text-primary' },
   { icon: 'csv', label: 'CSV', color: 'text-secondary' },
-  { icon: 'table_chart', label: 'XLSX', color: 'text-tertiary' },
+  { icon: 'table_chart', label: 'XLS/XLSX', color: 'text-tertiary' },
 ]
 
 export default function FileUploadOverlay() {
@@ -138,6 +138,16 @@ export default function FileUploadOverlay() {
             </div>
           ))}
         </div>
+        {!isScanning && (
+          <div className="mb-8 max-w-2xl space-y-1 text-center">
+            <p className="text-sm font-semibold text-on-surface-variant">
+              지원 형식: 이미지 영수증, CSV, XLS/XLSX, 텍스트 레이어 PDF
+            </p>
+            <p className="text-xs text-outline">
+              스캔형 PDF, 압축파일, 문서형 워드 파일은 아직 지원되지 않습니다.
+            </p>
+          </div>
+        )}
 
         {isScanning ? (
           <div className="flex items-center gap-3 mt-2 text-on-surface-variant">

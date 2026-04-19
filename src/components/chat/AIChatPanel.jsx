@@ -63,7 +63,7 @@ export default function AIChatPanel() {
   }
 
   return (
-    <aside className="w-[360px] shrink-0 bg-surface-container-lowest/80 backdrop-blur-xl rounded-xl shadow-2xl flex flex-col overflow-hidden hidden lg:flex">
+    <aside className="w-[360px] shrink-0 self-start lg:sticky lg:top-24 max-h-[calc(100vh-7rem)] bg-surface-container-lowest/80 backdrop-blur-xl rounded-xl shadow-2xl flex flex-col overflow-hidden hidden lg:flex">
       {/* Header */}
       <div className="p-4 border-b border-surface-container">
         <div className="flex items-center gap-3">

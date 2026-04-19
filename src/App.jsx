@@ -171,11 +171,11 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-surface text-on-surface">
       <TopNavBar />
-      <main className="max-w-[1440px] mx-auto px-4 md:px-8 pb-8 flex gap-6 h-[calc(100vh-6.75rem)] md:h-[calc(100vh-5rem)] overflow-hidden">
-        <div className="flex-grow flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
+      <main className="max-w-[1440px] mx-auto px-4 md:px-8 pb-8 flex gap-6 items-start min-h-[calc(100vh-6.75rem)] md:min-h-[calc(100vh-5rem)]">
+        <div className="flex-grow min-w-0 flex flex-col gap-6 pr-2">
           <Outlet />
         </div>
-        <div className="w-1.5 bg-surface-container hover:bg-primary/30 rounded-full hidden lg:block cursor-col-resize transition-colors shrink-0" />
+        <div className="w-1.5 self-stretch bg-surface-container hover:bg-primary/30 rounded-full hidden lg:block cursor-col-resize transition-colors shrink-0" />
         {isChatPanelOpen && <AIChatPanel />}
       </main>
 
