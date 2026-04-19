@@ -106,10 +106,14 @@ export async function analyzeDocumentWithGPT(imageFile: File): Promise<VisionPar
   }
 }
 
-export async function analyzeDocumentChunks(chunks: DocumentAnalysisChunk[]): Promise<DocumentParseResult[]> {
+export async function analyzeDocumentChunks(
+  chunks: DocumentAnalysisChunk[],
+  onProgress?: (completed: number, total: number) => void,
+): Promise<DocumentParseResult[]> {
   const results: DocumentParseResult[] = []
 
-  for (const chunk of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]
     const response = await fetch('/api/analyze-document', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -134,6 +138,7 @@ export async function analyzeDocumentChunks(chunks: DocumentAnalysisChunk[]): Pr
         .map((item: any, index: number) => normalizeDocumentItem(item, chunk, index))
         .filter((item: DocumentParseResult) => item.amount > 0)
     )
+    if (onProgress) onProgress(i + 1, chunks.length)
   }
 
   return results

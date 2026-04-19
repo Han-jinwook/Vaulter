@@ -204,3 +204,19 @@ export async function extractLocalDocument(file: File): Promise<LocalDocumentExt
 
   throw new Error('지원되지 않는 문서 형식입니다.')
 }
+
+/** Drive에서 내보낸 CSV 텍스트를 LocalDocumentExtraction으로 변환 */
+export async function parseCsvText(csvText: string, sourceName: string): Promise<LocalDocumentExtraction> {
+  const Papa = (await import('papaparse')).default
+  const parsed = Papa.parse<string[]>(csvText, { skipEmptyLines: 'greedy' })
+  if (parsed.errors.length && !parsed.data.length) {
+    throw new Error(`CSV 파싱 실패: ${parsed.errors[0]?.message || '형식을 읽지 못했습니다.'}`)
+  }
+  const rows = Array.isArray(parsed.data) ? parsed.data : []
+  const table = rowsToTextBlocks(rows)
+  return {
+    documentType: 'csv',
+    sourceName: String(sourceName || '스프레드시트').trim() || '스프레드시트',
+    ...table,
+  }
+}

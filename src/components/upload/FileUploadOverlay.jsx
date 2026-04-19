@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { useVaultStore } from '../../stores/vaultStore'
 import GoogleConnectModal from '../google/GoogleConnectModal'
+import SheetPickerModal from '../google/SheetPickerModal'
 import { getGoogleIntegrationStatus } from '../../lib/googleIntegration'
 import { analyzeDocumentChunks } from '../../lib/visionAIEngine'
 import { buildDocumentChunks } from '../../lib/documentChunking'
@@ -11,6 +12,7 @@ const fileTypes = [
   { icon: 'picture_as_pdf', label: 'PDF', color: 'text-primary' },
   { icon: 'csv', label: 'CSV', color: 'text-secondary' },
   { icon: 'table_chart', label: 'XLS/XLSX', color: 'text-tertiary' },
+  { icon: 'table_chart', label: 'Google Sheets', color: 'text-[#0F9D58]' },
 ]
 
 export default function FileUploadOverlay() {
@@ -26,6 +28,7 @@ export default function FileUploadOverlay() {
   const [isScanning, setIsScanning] = useState(false)
   const [scanLabel, setScanLabel] = useState('문서를 분석 중입니다...')
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
+  const [isSheetPickerOpen, setIsSheetPickerOpen] = useState(false)
   const pendingFilesRef = useRef([])
   const fileInputRef = useRef(null)
 
@@ -133,6 +136,14 @@ export default function FileUploadOverlay() {
           }
         }}
       />
+      <SheetPickerModal
+        isOpen={isSheetPickerOpen}
+        onClose={() => {
+          setIsSheetPickerOpen(false)
+          closeUploadModal()
+          setDragging(false)
+        }}
+      />
       {/* Backdrop */}
       <div className="absolute inset-0 bg-primary/10 backdrop-blur-md" onClick={close} />
 
@@ -189,13 +200,22 @@ export default function FileUploadOverlay() {
         ) : !isDragging && (
           <>
             <p className="text-on-surface-variant font-medium mb-4">또는</p>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-primary text-white py-4 px-10 rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
-            >
-              <span className="material-symbols-outlined">file_open</span>
-              내 기기에서 파일 선택
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-primary text-white py-4 px-10 rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
+              >
+                <span className="material-symbols-outlined">file_open</span>
+                내 기기에서 파일 선택
+              </button>
+              <button
+                onClick={() => setIsSheetPickerOpen(true)}
+                className="bg-[#0F9D58] text-white py-4 px-8 rounded-full font-bold text-lg shadow-xl shadow-[#0F9D58]/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
+              >
+                <span className="material-symbols-outlined">table_chart</span>
+                구글 스프레드시트 가져오기
+              </button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"

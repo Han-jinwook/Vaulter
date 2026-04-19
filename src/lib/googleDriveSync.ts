@@ -12,11 +12,19 @@ export type DriveBackupStatus = {
 }
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+export const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 const DRIVE_SYNC_DB = 'vaulter-google-drive-sync'
 const DRIVE_SYNC_STORE = 'kv'
 const KEY_DRIVE_AUTH = 'drive_auth'
+const KEY_DRIVE_READONLY_AUTH = 'drive_readonly_auth'
 const KEY_BACKUP_FILE_ID = 'backup_file_id'
 const KEY_LAST_BACKUP_AT = 'last_backup_at'
+
+export type SpreadsheetFileInfo = {
+  id: string
+  name: string
+  modifiedTime: string
+}
 /** @deprecated 단일 파일 방식 — uploadRotatedBackup 으로 교체됨 */
 const BACKUP_FILE_NAME = 'vaulter_backup.json'
 
@@ -280,6 +288,90 @@ export async function validateDriveAppDataAccess(accessTokenOverride?: string): 
 
 export async function disconnectDriveBackupVault(): Promise<void> {
   await clearStoredDriveAuth()
+  await dbSet(KEY_DRIVE_READONLY_AUTH, null)
+}
+
+// ─── Google Drive Readonly (스프레드시트 마이그레이션) ──────────────────────
+
+async function getStoredDriveReadonlyAuth() {
+  return dbGet<GoogleDriveAuthToken | null>(KEY_DRIVE_READONLY_AUTH)
+}
+
+async function requestDriveReadonlyToken(): Promise<GoogleDriveAuthToken> {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  if (!clientId) throw new Error('VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.')
+  await ensureGoogleIdentityScript()
+  const existing = await getStoredDriveReadonlyAuth()
+
+  return new Promise<GoogleDriveAuthToken>((resolve, reject) => {
+    let settled = false
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: DRIVE_READONLY_SCOPE,
+      prompt: existing ? '' : 'consent',
+      callback: async (response) => {
+        if (settled) return
+        settled = true
+        if ((response as any).error || !response.access_token) {
+          reject(new Error(`Drive 읽기 권한 요청 실패: ${(response as any).error || 'unknown'}`))
+          return
+        }
+        const token: GoogleDriveAuthToken = {
+          accessToken: response.access_token,
+          expiresAt: Date.now() + Number(response.expires_in || 3600) * 1000,
+          scope: response.scope || DRIVE_READONLY_SCOPE,
+          tokenType: response.token_type || 'Bearer',
+        }
+        await dbSet(KEY_DRIVE_READONLY_AUTH, token)
+        resolve(token)
+      },
+      error_callback: (error) => {
+        if (settled) return
+        settled = true
+        const type = error?.type || 'unknown'
+        if (type === 'popup_closed') {
+          reject(new Error('Google 로그인 팝업이 닫혔습니다.'))
+          return
+        }
+        reject(new Error(`Drive 읽기 권한 요청 실패: ${type}`))
+      },
+    })
+    tokenClient.requestAccessToken()
+  })
+}
+
+export async function ensureDriveReadonlyToken(): Promise<string> {
+  const token = await getStoredDriveReadonlyAuth()
+  if (token && token.expiresAt > Date.now() + 60_000) return token.accessToken
+  const refreshed = await requestDriveReadonlyToken()
+  return refreshed.accessToken
+}
+
+/** 유저의 Drive에서 스프레드시트 목록 반환 (최근 수정순, 최대 30개) */
+export async function listSpreadsheetFiles(): Promise<SpreadsheetFileInfo[]> {
+  const token = await ensureDriveReadonlyToken()
+  const query = new URLSearchParams({
+    q: `mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+    fields: 'files(id,name,modifiedTime)',
+    pageSize: '30',
+    orderBy: 'modifiedTime desc',
+  })
+  const payload = await fetchDriveJson(`files?${query.toString()}`, token)
+  return Array.isArray(payload?.files) ? (payload.files as SpreadsheetFileInfo[]) : []
+}
+
+/** 스프레드시트를 CSV 텍스트로 내보내기 (첫 번째 시트 기준) */
+export async function exportSheetAsCsv(fileId: string): Promise<string> {
+  const token = await ensureDriveReadonlyToken()
+  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fcsv`
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`스프레드시트 CSV 내보내기 실패 (${response.status})${text ? `: ${text}` : ''}`)
+  }
+  return response.text()
 }
 
 // ─── 내부 헬퍼 ───────────────────────────────────────────────────────────────
