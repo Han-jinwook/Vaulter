@@ -1,0 +1,13 @@
+diff --git a/node_modules/netlify-cli/dist/utils/framework-server.js b/node_modules/netlify-cli/dist/utils/framework-server.js
+index 1f23201..ee2809a 100644
+--- a/node_modules/netlify-cli/dist/utils/framework-server.js
++++ b/node_modules/netlify-cli/dist/utils/framework-server.js
+@@ -38,7 +38,7 @@ export const startFrameworkServer = async function ({ cwd, settings, }) {
+         else {
+             const waitPortPromise = waitPort(
+             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+-            settings.frameworkPort, 'localhost', FRAMEWORK_PORT_TIMEOUT_MS, 20);
++            settings.frameworkPort, 'localhost', FRAMEWORK_PORT_TIMEOUT_MS);
+             const timerId = setTimeout(() => {
+                 if (!port?.open) {
+                     spinner.update({

@@ -31,7 +31,7 @@ type ConfirmOption = {
   category: string
 }
 
-type ChatMessage = {
+export type ChatMessage = {
   id: number
   role: ChatRole
   type: ChatType
@@ -51,7 +51,7 @@ type LedgerDecision = {
   category: string
 }
 
-type VaultTransaction = Transaction & {
+export type VaultTransaction = Transaction & {
   id: string
   createdAt: string
   source: 'upload' | 'gmail' | 'manual'
@@ -74,6 +74,18 @@ type IngestBackgroundResult = {
 type IngestDocumentBatchResult = {
   insertedCount: number
   insertedTxIds: string[]
+}
+
+export type VaultBackupSnapshot = {
+  version: number
+  exportedAt: string
+  transactions: VaultTransaction[]
+  messages: ChatMessage[]
+  knownAccounts: string[]
+  lastLedgerDecision: LedgerDecision | null
+  ledgerContextTitle: string
+  activeLedgerFilter: LedgerFilter
+  reviewPinnedTxIds: string[]
 }
 
 type VaultState = {
@@ -111,6 +123,8 @@ type VaultState = {
     sourceLabel: string,
     items: DocumentParseResult[]
   ) => IngestDocumentBatchResult
+  exportBackupSnapshot: () => VaultBackupSnapshot
+  restoreFromBackupSnapshot: (snapshot: VaultBackupSnapshot) => void
   syncPendingFromBackgroundQueue: () => Promise<number>
   processDroppedFiles: () => Promise<void>
   analyzeDocumentWithVision: (documentId: string, file: File, fileType: string) => Promise<string>
@@ -197,6 +211,12 @@ function buildDocumentSummaryText(sourceLabel: string, insertedCount: number, re
     return `"${sourceLabel}"에서 ${insertedCount}건을 검토 대기 상태로 반영했어요. 우선 ${reviewCount}건만 빠르게 확인해 주세요.`
   }
   return `"${sourceLabel}"에서 ${insertedCount}건을 검토 대기 상태로 반영했어요.`
+}
+
+function computeNextInternalId(transactions: VaultTransaction[], messages: ChatMessage[]) {
+  const txMax = transactions.reduce((max, tx) => Math.max(max, Number(tx.id) || 0), 0)
+  const msgMax = messages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
+  return Math.max(100, txMax, msgMax)
 }
 
 function buildPendingTxFromParsed(input: {
@@ -722,6 +742,41 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       insertedCount: nextTxs.length,
       insertedTxIds: nextTxs.map((tx) => tx.id),
     }
+  },
+
+  exportBackupSnapshot: () => {
+    const state = get()
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      transactions: state.transactions,
+      messages: state.messages,
+      knownAccounts: state.knownAccounts,
+      lastLedgerDecision: state.lastLedgerDecision,
+      ledgerContextTitle: state.ledgerContextTitle,
+      activeLedgerFilter: state.activeLedgerFilter,
+      reviewPinnedTxIds: state.reviewPinnedTxIds,
+    }
+  },
+
+  restoreFromBackupSnapshot: (snapshot) => {
+    const transactions = Array.isArray(snapshot?.transactions) ? snapshot.transactions : []
+    const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : []
+    const knownAccounts = Array.isArray(snapshot?.knownAccounts) ? snapshot.knownAccounts : []
+    _id = computeNextInternalId(transactions, messages)
+
+    set({
+      transactions,
+      messages,
+      knownAccounts,
+      lastLedgerDecision: snapshot?.lastLedgerDecision || null,
+      ledgerContextTitle: snapshot?.ledgerContextTitle || '데이터 원장 (전체)',
+      activeLedgerFilter: snapshot?.activeLedgerFilter || 'all',
+      reviewPinnedTxIds: Array.isArray(snapshot?.reviewPinnedTxIds) ? snapshot.reviewPinnedTxIds : [],
+      hoveredTxId: null,
+      isDragging: false,
+      isProcessing: false,
+    })
   },
 
   syncPendingFromBackgroundQueue: async () => {

@@ -9,6 +9,7 @@ export default function AIChatPanel() {
     messages,
     hoveredTxId,
     transactions,
+    knownAccounts,
     confirmTransaction,
     confirmTransactionAccount,
     completeTransactionReview,
@@ -91,6 +92,7 @@ export default function AIChatPanel() {
             key={msg.id}
             msg={msg}
             transactions={transactions}
+            knownAccounts={knownAccounts}
             onConfirm={confirmTransaction}
             onAccountConfirm={confirmTransactionAccount}
             onCompleteReview={completeTransactionReview}
@@ -156,6 +158,7 @@ export default function AIChatPanel() {
 function ChatBubble({
   msg,
   transactions,
+  knownAccounts,
   onConfirm,
   onAccountConfirm,
   onCompleteReview,
@@ -167,6 +170,16 @@ function ChatBubble({
   const [selectedCategory, setSelectedCategory] = useState('')
   const [accountInput, setAccountInput] = useState('')
   const tx = msg.txId ? transactions.find((t) => t.id === String(msg.txId)) : null
+
+  // 복원된 메시지에서도 기존 선택값을 복구하고,
+  // msg.accountOptions가 비어 있으면 현재 knownAccounts를 fallback으로 사용
+  const liveAccountOptions = (() => {
+    const msgOpts = Array.isArray(msg.accountOptions) ? msg.accountOptions : []
+    if (msgOpts.length > 0) return msgOpts
+    return (knownAccounts ?? [])
+      .filter(Boolean)
+      .map((a) => ({ label: a, category: a }))
+  })()
 
   useEffect(() => {
     if (msg.type !== 'account_confirm') return
@@ -286,7 +299,6 @@ function ChatBubble({
   if (msg.type === 'account_confirm') {
     const isResolved = msg.resolved || (tx?.status === 'CONFIRMED' && Boolean(tx?.account))
     const categoryOptions = Array.isArray(msg.options) ? msg.options : []
-    const accountOptions = Array.isArray(msg.accountOptions) ? msg.accountOptions : []
     const canSubmit = Boolean(selectedCategory.trim() && accountInput.trim() && msg.txId)
     return (
       <div className="flex flex-col gap-1 max-w-[88%] animate-fade-in">
@@ -352,9 +364,9 @@ function ChatBubble({
               </div>
             )}
             <div className="ml-1 mt-3 text-[11px] font-semibold text-on-surface-variant">계정</div>
-            {accountOptions.length ? (
+            {liveAccountOptions.length > 0 ? (
               <div className="flex flex-wrap gap-2 mt-1 ml-1">
-                {accountOptions.map((opt) => (
+                {liveAccountOptions.map((opt) => (
                   <button
                     key={opt.label}
                     onClick={() => setAccountInput(opt.category)}

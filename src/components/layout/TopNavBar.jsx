@@ -1,12 +1,33 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
+import { useVaultStore } from '../../stores/vaultStore'
+import GoogleConnectModal from '../google/GoogleConnectModal'
+import { getGoogleIntegrationStatus } from '../../lib/googleIntegration'
 import {
   clearGmailSyncTestData,
-  connectGmailReadonly,
+  clearStoredGmailAuth,
+  ensureGmailAccessToken,
   setDigestHourPreference,
   validateGmailReadonlyAccess,
 } from '../../lib/gmailSync'
+import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
+import { clearLocalVaultSnapshot } from '../../lib/localVaultPersistence'
+
+const EMPTY_SNAPSHOT = {
+  version: 1,
+  exportedAt: '',
+  transactions: [],
+  messages: [],
+  knownAccounts: [],
+  lastLedgerDecision: null,
+  ledgerContextTitle: '데이터 원장 (전체)',
+  activeLedgerFilter: 'all',
+  reviewPinnedTxIds: [],
+}
+
+// DEV-only: 각 TopNavBar 인스턴스에 고유 ID를 부여해서 중복 마운트를 즉시 탐지한다
+let _instanceCounter = 0
 
 const navItems = [
   { path: '/', desktopLabel: '지기(Keeper)', mobileLabel: '지기' },
@@ -33,18 +54,32 @@ export default function TopNavBar() {
   const location = useLocation()
   const {
     openCreditModal,
+    openSettingsModal,
     gmailSyncPhase,
+    gmailConnectState,
     lastGmailSyncAt,
+    setGmailConnectState,
     setGmailSyncState,
     setLastGmailSyncAt,
     clearGmailHistoryClearBadge,
+    setDriveBackupState,
   } = useUIStore()
-  const [connectState, setConnectState] = useState('idle')
+  const exportBackupSnapshot = useVaultStore((s) => s.exportBackupSnapshot)
+  const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
   const [resetState, setResetState] = useState('idle')
   const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
   const resetTimeoutRef = useRef(null)
   const connectTimeoutRef = useRef(null)
+  // DEV: 인스턴스 고유 ID (마운트 시 할당 → 중복 마운트 탐지용)
+  const instanceIdRef = useRef(null)
+  const renderCountRef = useRef(0)
+  if (instanceIdRef.current === null) {
+    instanceIdRef.current = ++_instanceCounter
+  }
+  renderCountRef.current += 1
   const isActive = (path) => location.pathname === path
+  const connectState = gmailConnectState || 'idle'
   const connectLabel = CONNECT_LABELS[connectState] || CONNECT_LABELS.idle
 
   const isConnectingGmail =
@@ -68,7 +103,7 @@ export default function TopNavBar() {
       if (elapsed < CONNECT_HARD_TIMEOUT_MS) return
       console.info('[GmailConnect] hard timeout fired', { elapsedMs: Math.round(elapsed) })
       clearConnectTimer()
-      setConnectState('error')
+      setGmailConnectState('error')
       setGmailSyncState('error', 'Gmail 연동 지연됨')
       setToast({ type: 'error', message: 'Gmail 연동이 지연되어 취소되었습니다. 다시 시도해 주세요.' })
     }, 1000)
@@ -106,19 +141,21 @@ export default function TopNavBar() {
       return undefined
     }
     if (gmailSyncPhase === 'reading' || gmailSyncPhase === 'parsing') {
-      setConnectState((prev) => (prev === 'syncing' ? prev : 'syncing'))
+      if (connectState !== 'syncing') {
+        setGmailConnectState('syncing')
+      }
       return undefined
     }
     if (gmailSyncPhase === 'success') {
       clearConnectTimer()
-      setConnectState('success')
-      const timer = window.setTimeout(() => setConnectState('idle'), 5000)
+      setGmailConnectState('success')
+      const timer = window.setTimeout(() => setGmailConnectState('idle'), 5000)
       return () => window.clearTimeout(timer)
     }
     if (gmailSyncPhase === 'error') {
       clearConnectTimer()
-      setConnectState('error')
-      const timer = window.setTimeout(() => setConnectState('idle'), 6000)
+      setGmailConnectState('error')
+      const timer = window.setTimeout(() => setGmailConnectState('idle'), 6000)
       return () => window.clearTimeout(timer)
     }
     return undefined
@@ -145,11 +182,11 @@ export default function TopNavBar() {
     if (connectState !== 'syncing') return
     const timer = window.setTimeout(() => {
       console.info('[GmailConnect] syncing watchdog → idle')
-      setConnectState('idle')
+      setGmailConnectState('idle')
       setGmailSyncState('idle', '')
     }, 35_000)
     return () => window.clearTimeout(timer)
-  }, [connectState, setGmailSyncState])
+  }, [connectState, setGmailConnectState, setGmailSyncState])
 
   // 상태 전이 가시화: connectState / gmailSyncPhase 가 어떤 순서로 바뀌는지 콘솔에 실시간 출력.
   useEffect(() => {
@@ -182,26 +219,26 @@ export default function TopNavBar() {
     }
   }, [])
 
-  const handleConnectGmail = async () => {
+  const executeGmailConnect = async () => {
     if (isConnectingGmail) return
     console.info('[GmailConnect] enter handleConnectGmail')
     setToast(null)
-    setConnectState('requesting_auth')
+    setGmailConnectState('requesting_auth')
     setGmailSyncState('connecting', '')
     armConnectHardTimeout()
     try {
-      const token = await withTimeout(
-        connectGmailReadonly(),
+      const accessToken = await withTimeout(
+        ensureGmailAccessToken(),
         OAUTH_STEP_TIMEOUT_MS,
-        '권한 요청이 지연되고 있습니다. 팝업 차단을 해제하고 다시 시도해 주세요.'
+        'Google 통합 연결 확인이 지연되고 있습니다. 다시 시도해 주세요.'
       )
-      console.info('[GmailConnect] oauth callback ok')
-      setConnectState('verifying')
+      console.info('[GmailConnect] stored token ready')
+      setGmailConnectState('verifying')
 
       // ───────── verifying 단계를 스텝별로 분해 + 자체 타임아웃 + 로그 ─────────
       console.info('[GmailConnect] step: validate start')
       await withTimeout(
-        validateGmailReadonlyAccess(token.accessToken),
+        validateGmailReadonlyAccess(accessToken),
         8_000,
         'Gmail 프로필 확인이 지연되고 있습니다.'
       )
@@ -244,21 +281,44 @@ export default function TopNavBar() {
       }
       // ─────────────────────────────────────────────────────────────────────
       clearConnectTimer()
-      setConnectState('syncing')
+      setGmailConnectState('syncing')
       setGmailSyncState('reading', '')
       setToast({ type: 'success', message: 'Gmail 연동 완료. 메일을 가져오는 중입니다.' })
     } catch (error) {
       console.info('[GmailConnect] failure', error)
       clearConnectTimer()
-      setConnectState('error')
-      setGmailSyncState('error', 'Gmail 연동 실패')
       const message = error instanceof Error ? error.message : 'Gmail 연동 중 오류가 발생했습니다.'
+      // 토큰 만료 / 미연동: 저장 토큰 정리 후 통합 재인증 모달로 유도
+      if (error instanceof Error && (message.includes('만료') || message.includes('연동되지 않았습니다'))) {
+        clearStoredGmailAuth().catch(() => {})
+        setGmailConnectState('idle')
+        setGmailSyncState('idle', '')
+        setIsGoogleModalOpen(true)
+        return
+      }
+      setGmailConnectState('error')
+      setGmailSyncState('error', 'Gmail 연동 실패')
       setToast({ type: 'error', message })
     }
   }
 
-  const handleResetGmailTestData = async () => {
+  const handleConnectGmail = async () => {
+    try {
+      const integration = await getGoogleIntegrationStatus()
+      if (!integration.combinedConnected) {
+        setIsGoogleModalOpen(true)
+        return
+      }
+      await executeGmailConnect()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google 통합 상태 확인 중 오류가 발생했습니다.'
+      setToast({ type: 'error', message })
+    }
+  }
+
+  const handleResetAllData = async () => {
     if (isClearingGmail) return
+    if (!window.confirm('모든 거래 내역, 메시지, 계좌 정보가 삭제됩니다.\n계속하시겠습니까?')) return
     clearGmailHistoryClearBadge()
     setToast(null)
     setResetState('resetting')
@@ -274,20 +334,41 @@ export default function TopNavBar() {
       setToast({ type: 'error', message: '초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.' })
     }, 8000)
     try {
-      await clearGmailSyncTestData(true)
+      // 1) Drive가 연결돼 있으면 초기화 전 현재 상태를 'pre-reset' 태그 백업으로 먼저 저장
+      //    → 설정 > 백업 히스토리에서 복원 가능
+      const { driveBackupConnected } = useUIStore.getState()
+      if (driveBackupConnected) {
+        try {
+          await uploadRotatedBackup(exportBackupSnapshot(), 'pre-reset')
+        } catch (e) {
+          console.warn('[Reset] pre-reset backup failed (계속 진행)', e)
+        }
+      }
+      // 2) Drive 연결 해제 — 이후 원장 변경이 Drive로 자동 업로드되지 않도록
+      await disconnectDriveBackupVault()
+      setDriveBackupState('idle', '', false)
+      // 3) 인메모리 원장 초기화 (Drive 이미 해제됐으므로 자동백업 안 됨)
+      restoreFromBackupSnapshot(EMPTY_SNAPSHOT)
+      // 4) IndexedDB 정리: 로컬 스냅샷, Gmail 기록, Gmail 토큰
+      await Promise.all([
+        clearLocalVaultSnapshot(),
+        clearGmailSyncTestData(false),
+        clearStoredGmailAuth(),
+      ])
       if (settled) return
       settled = true
       setLastGmailSyncAt(null)
+      setGmailConnectState('idle')
+      setGmailSyncState('idle', '')
       setResetState('idle')
-      setToast({ type: 'success', message: 'Gmail 테스트 기록 초기화 완료' })
+      setToast({ type: 'success', message: '전체 데이터 초기화 완료 (Gmail·Drive 연동 해제됨)' })
     } catch (error) {
       if (settled) return
       settled = true
-      clearGmailHistoryClearBadge()
       setResetState('error')
       setToast({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Gmail 기록 초기화 중 오류가 발생했습니다.',
+        message: error instanceof Error ? error.message : '데이터 초기화 중 오류가 발생했습니다.',
       })
     } finally {
       if (resetTimeoutRef.current) {
@@ -299,6 +380,36 @@ export default function TopNavBar() {
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      {import.meta.env.DEV && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 12,
+            left: 12,
+            zIndex: 9999,
+            background: 'rgba(0,0,0,0.82)',
+            color: '#fff',
+            fontFamily: 'monospace',
+            fontSize: 11,
+            padding: '7px 10px',
+            borderRadius: 8,
+            lineHeight: 1.6,
+            pointerEvents: 'none',
+            userSelect: 'none',
+            whiteSpace: 'pre',
+          }}
+        >
+          {`[NavBar #${instanceIdRef.current}  r:${renderCountRef.current}]\nstore gmailConnectState : ${gmailConnectState ?? 'undefined'}\nstore gmailSyncPhase   : ${gmailSyncPhase}\nlocal connectState     : ${connectState}\nbutton connectLabel    : ${connectLabel}`}
+        </div>
+      )}
+      <GoogleConnectModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        onConnected={() => {
+          setIsGoogleModalOpen(false)
+          executeGmailConnect()
+        }}
+      />
       <div className="w-full max-w-[1440px] mx-auto">
         <div className="flex justify-between items-center px-4 md:px-8 h-16 md:h-20">
           {/* Left: Logo + Desktop Nav */}
@@ -344,23 +455,40 @@ export default function TopNavBar() {
             >
               <span className="material-symbols-outlined text-base">mark_email_read</span>
               {connectLabel}
+              {import.meta.env.DEV && (
+                <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: 2 }}>
+                  #{instanceIdRef.current}
+                </span>
+              )}
             </button>
 
             <button
-              onClick={handleResetGmailTestData}
+              onClick={openSettingsModal}
+              className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10"
+              title="설정"
+            >
+              <span className="material-symbols-outlined">settings</span>
+            </button>
+
+            <button
+              onClick={handleResetAllData}
               disabled={isClearingGmail}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 md:px-4 py-1.5 rounded-full font-bold text-xs md:text-sm cursor-pointer transition-colors bg-surface-container text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-              title="Gmail 테스트 기록 초기화"
+              title="전체 데이터 초기화 (원장·Gmail 기록)"
             >
-              <span className="material-symbols-outlined text-base">restart_alt</span>
-              Gmail 기록 초기화
+              <span className="material-symbols-outlined text-base">delete_sweep</span>
+              전체 초기화
             </button>
 
             <button className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10">
               <span className="material-symbols-outlined">notifications</span>
             </button>
 
-            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 cursor-pointer transition-all bg-surface-container-high border-surface-container-lowest hover:ring-2 hover:ring-primary/20">
+            <div
+              onClick={openSettingsModal}
+              className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 cursor-pointer transition-all bg-surface-container-high border-surface-container-lowest hover:ring-2 hover:ring-primary/20"
+              title="설정 열기"
+            >
               <div className="w-full h-full flex items-center justify-center bg-primary/10">
                 <span className="material-symbols-outlined text-xl text-primary">person</span>
               </div>

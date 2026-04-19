@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { useVaultStore } from '../../stores/vaultStore'
+import GoogleConnectModal from '../google/GoogleConnectModal'
+import { getGoogleIntegrationStatus } from '../../lib/googleIntegration'
 import { analyzeDocumentChunks } from '../../lib/visionAIEngine'
 import { buildDocumentChunks } from '../../lib/documentChunking'
 import { detectUploadFileKind, extractLocalDocument } from '../../lib/documentParsers'
@@ -23,6 +25,8 @@ export default function FileUploadOverlay() {
   } = useVaultStore()
   const [isScanning, setIsScanning] = useState(false)
   const [scanLabel, setScanLabel] = useState('문서를 분석 중입니다...')
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
+  const pendingFilesRef = useRef([])
   const fileInputRef = useRef(null)
 
   const close = () => {
@@ -37,7 +41,7 @@ export default function FileUploadOverlay() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const runParsingFlow = async (files = []) => {
+  const processFiles = async (files = []) => {
     const selectedFiles = files.filter(Boolean)
     if (!selectedFiles.length) return
 
@@ -88,6 +92,23 @@ export default function FileUploadOverlay() {
     }
   }
 
+  const runParsingFlow = async (files = []) => {
+    const selectedFiles = files.filter(Boolean)
+    if (!selectedFiles.length) return
+    try {
+      const integration = await getGoogleIntegrationStatus()
+      if (!integration.combinedConnected) {
+        pendingFilesRef.current = selectedFiles
+        setIsGoogleModalOpen(true)
+        return
+      }
+      await processFiles(selectedFiles)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Google 통합 상태를 확인하지 못했습니다.'
+      window.alert(`업로드를 시작하지 못했습니다.\n${msg}`)
+    }
+  }
+
   const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -101,11 +122,22 @@ export default function FileUploadOverlay() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
+      <GoogleConnectModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        onConnected={() => {
+          const files = pendingFilesRef.current
+          pendingFilesRef.current = []
+          if (files.length) {
+            processFiles(files)
+          }
+        }}
+      />
       {/* Backdrop */}
       <div className="absolute inset-0 bg-primary/10 backdrop-blur-md" onClick={close} />
 
       {/* Drop Zone */}
-      <div className="relative w-full max-w-5xl h-[80vh] flex flex-col items-center justify-center rounded-xl bg-surface-container-lowest/90 backdrop-blur-xl p-12 text-center border-4 border-dashed border-primary/40">
+      <div className="relative w-full max-w-5xl h-[80vh] overflow-y-auto custom-scrollbar flex flex-col items-center justify-center rounded-xl bg-surface-container-lowest/90 backdrop-blur-xl p-12 text-center border-4 border-dashed border-primary/40">
         {/* Close */}
         <button
           onClick={close}
@@ -144,7 +176,7 @@ export default function FileUploadOverlay() {
               지원 형식: 이미지 영수증, CSV, XLS/XLSX, 텍스트 레이어 PDF
             </p>
             <p className="text-xs text-outline">
-              스캔형 PDF, 압축파일, 문서형 워드 파일은 아직 지원되지 않습니다.
+              스캔형 PDF, 압축파일, 문서형 워드 파일은 아직 지원되지 않습니다. 개인 백업금고 연결은 설정에서 할 수 있습니다.
             </p>
           </div>
         )}
@@ -158,24 +190,24 @@ export default function FileUploadOverlay() {
           <>
             <p className="text-on-surface-variant font-medium mb-4">또는</p>
             <button
-            onClick={() => fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current?.click()}
               className="bg-primary text-white py-4 px-10 rounded-full font-bold text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
             >
               <span className="material-symbols-outlined">file_open</span>
               내 기기에서 파일 선택
             </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf,.csv,.xlsx,.xls"
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files || [])
-              runParsingFlow(files)
-              e.target.value = ''
-            }}
-          />
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.csv,.xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || [])
+                runParsingFlow(files)
+                e.target.value = ''
+              }}
+            />
           </>
         )}
 

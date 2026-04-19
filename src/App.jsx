@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Routes, Route, Outlet } from 'react-router-dom'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
+import SettingsModal from './components/settings/SettingsModal'
 import DashboardPage from './pages/DashboardPage'
 import BudgetPage from './pages/BudgetPage'
 import AssetsPage from './pages/AssetsPage'
@@ -9,8 +10,21 @@ import VaultPage from './pages/VaultPage'
 import OnboardingPage from './pages/OnboardingPage'
 import FileUploadOverlay from './components/upload/FileUploadOverlay'
 import CreditChargeModal from './components/credit/CreditChargeModal'
+import { getDriveBackupStatus, uploadRotatedBackup } from './lib/googleDriveSync'
+import { readLocalVaultSnapshot, writeLocalVaultSnapshot } from './lib/localVaultPersistence'
 import { useUIStore } from './stores/uiStore'
 import { useVaultStore } from './stores/vaultStore'
+
+function toSnapshotKey(snapshot) {
+  return JSON.stringify({ ...snapshot, exportedAt: '' })
+}
+
+const IDLE_MS = 30_000       // 마지막 변경 후 30초 idle → Drive 백업
+const MAX_INTERVAL_MS = 5 * 60_000  // 5분 이상 지났으면 즉시 백업
+
+function isNonEmpty(s) {
+  return (s?.transactions?.length ?? 0) > 0 || (s?.messages?.length ?? 0) > 0
+}
 
 export default function App() {
   return (
@@ -30,13 +44,55 @@ function AppShell() {
   const {
     isUploadModalOpen,
     isCreditModalOpen,
+    isSettingsModalOpen,
     isChatPanelOpen,
     setGmailSyncState,
     setLastGmailSyncAt,
+    setDriveBackupState,
+    setLastDriveBackupAt,
   } = useUIStore()
   const { isDragging, setDragging, ingestBackgroundParsedEntries, syncPendingFromBackgroundQueue } = useVaultStore()
   const dragCounter = useRef(0)
   const gmailStatusTimerRef = useRef(null)
+  const backupPersistTimerRef = useRef(null)
+  const lastAutoBackupAtRef = useRef(0)
+  const pendingSnapshotRef = useRef(null)
+
+  const doFlushBackup = async (snapshot) => {
+    pendingSnapshotRef.current = null
+    try {
+      await writeLocalVaultSnapshot(snapshot)
+    } catch (error) {
+      console.warn('[VaultLocal] persist failed', error)
+    }
+    const { driveBackupConnected } = useUIStore.getState()
+    if (!driveBackupConnected || !isNonEmpty(snapshot)) return
+    try {
+      setDriveBackupState('syncing', '개인 백업금고에 상시 백업 중...', true)
+      const uploaded = await uploadRotatedBackup(snapshot)
+      lastAutoBackupAtRef.current = Date.now()
+      setLastDriveBackupAt(new Date(uploaded.modifiedTime).getTime())
+      setDriveBackupState('success', '개인 백업금고 상시 백업 완료', true)
+    } catch (error) {
+      console.warn('[DriveBackup] auto backup failed', error)
+      setDriveBackupState(
+        'error',
+        error instanceof Error ? error.message : '개인 백업금고 상시 백업 중 오류가 발생했습니다.',
+        true,
+      )
+    }
+  }
+
+  const handleVisibilityHide = () => {
+    if (document.visibilityState !== 'hidden') return
+    const snapshot = pendingSnapshotRef.current
+    if (!snapshot) return
+    if (backupPersistTimerRef.current) {
+      window.clearTimeout(backupPersistTimerRef.current)
+      backupPersistTimerRef.current = null
+    }
+    doFlushBackup(snapshot)
+  }
 
   useEffect(() => {
     const onEnter = (e) => {
@@ -73,10 +129,86 @@ function AppShell() {
   }, [setDragging])
 
   useEffect(() => {
-    syncPendingFromBackgroundQueue().catch((error) => {
-      console.warn('[GmailSync] queue drain failed', error)
-    })
-  }, [syncPendingFromBackgroundQueue])
+    let cancelled = false
+    let unsubscribe = () => {}
+
+    const bootstrap = async () => {
+      try {
+        const localSnapshot = await readLocalVaultSnapshot()
+        if (!cancelled) {
+          if (localSnapshot?.version) {
+            useVaultStore.getState().restoreFromBackupSnapshot(localSnapshot)
+          } else {
+            useVaultStore.getState().restoreFromBackupSnapshot({
+              version: 1,
+              exportedAt: new Date().toISOString(),
+              transactions: [],
+              messages: [],
+              knownAccounts: [],
+              lastLedgerDecision: null,
+              ledgerContextTitle: '데이터 원장 (전체)',
+              activeLedgerFilter: 'all',
+              reviewPinnedTxIds: [],
+            })
+          }
+        }
+      } catch (error) {
+        console.warn('[VaultLocal] bootstrap failed', error)
+      }
+
+      try {
+        await syncPendingFromBackgroundQueue()
+      } catch (error) {
+        console.warn('[GmailSync] queue drain failed', error)
+      }
+
+      try {
+        const status = await getDriveBackupStatus()
+        if (!cancelled) {
+          setDriveBackupState('idle', '', status.connected)
+          setLastDriveBackupAt(status.lastBackupAt)
+        }
+      } catch (error) {
+        console.warn('[DriveBackup] status bootstrap failed', error)
+      }
+
+      let lastSerialized = toSnapshotKey(useVaultStore.getState().exportBackupSnapshot())
+
+      unsubscribe = useVaultStore.subscribe(() => {
+        const snapshot = useVaultStore.getState().exportBackupSnapshot()
+        const serialized = toSnapshotKey(snapshot)
+        if (serialized === lastSerialized) return
+        lastSerialized = serialized
+
+        pendingSnapshotRef.current = snapshot
+
+        if (backupPersistTimerRef.current) {
+          window.clearTimeout(backupPersistTimerRef.current)
+        }
+
+        const elapsed = Date.now() - lastAutoBackupAtRef.current
+        const delay = elapsed > MAX_INTERVAL_MS ? 0 : IDLE_MS
+
+        backupPersistTimerRef.current = window.setTimeout(() => {
+          backupPersistTimerRef.current = null
+          doFlushBackup(snapshot)
+        }, delay)
+      })
+    }
+
+    bootstrap()
+    document.addEventListener('visibilitychange', handleVisibilityHide)
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityHide)
+      if (backupPersistTimerRef.current) {
+        window.clearTimeout(backupPersistTimerRef.current)
+        backupPersistTimerRef.current = null
+      }
+    }
+  }, [setDriveBackupState, setLastDriveBackupAt, syncPendingFromBackgroundQueue])
 
   useEffect(() => {
     const derivePhaseFromStatus = (text) => {
@@ -181,6 +313,7 @@ function AppShell() {
 
       {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}
       {isCreditModalOpen && <CreditChargeModal />}
+      {isSettingsModalOpen && <SettingsModal />}
     </div>
   )
 }

@@ -17,7 +17,7 @@ export type BackgroundParsedItem = {
   confidence?: number
 }
 
-const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
+export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
 const GMAIL_SYNC_DB = 'vaulter-gmail-sync'
 const GMAIL_SYNC_STORE = 'kv'
 const KEY_AUTH = 'gmail_auth'
@@ -98,7 +98,7 @@ async function dbKeys(): Promise<string[]> {
   })
 }
 
-function ensureGoogleIdentityScript(): Promise<void> {
+export function ensureGoogleIdentityScript(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
   if (window.google?.accounts?.oauth2) return Promise.resolve()
   return new Promise((resolve, reject) => {
@@ -201,6 +201,14 @@ export async function connectGmailReadonly(): Promise<GmailAuthToken> {
 
 export async function getStoredGmailAuth(): Promise<GmailAuthToken | null> {
   return dbGet<GmailAuthToken | null>(KEY_AUTH)
+}
+
+export async function storeGmailAuth(token: GmailAuthToken): Promise<void> {
+  await dbSet(KEY_AUTH, token)
+}
+
+export async function clearStoredGmailAuth(): Promise<void> {
+  await dbDelete(KEY_AUTH)
 }
 
 export async function ensureGmailAccessToken(): Promise<string> {
