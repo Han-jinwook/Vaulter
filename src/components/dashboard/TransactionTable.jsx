@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useVaultStore } from '../../stores/vaultStore'
+import { useUIStore } from '../../stores/uiStore'
 
 const weekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
 
@@ -30,20 +32,27 @@ export default function TransactionTable() {
     ledgerContextTitle,
     activeLedgerFilter,
     setLedgerContextByFilter,
+    knownAccounts,
   } = useVaultStore()
+  const aiFilter = useUIStore((s) => s.aiFilter)
+  const clearAiFilter = useUIStore((s) => s.clearAiFilter)
   const [editingCell, setEditingCell] = useState(null)
   const [draftValue, setDraftValue] = useState('')
 
   const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
 
   const filteredTransactions = useMemo(() => {
+    // AI 필터가 활성화된 경우 ID 기반으로 우선 적용
+    if (aiFilter?.ids) {
+      return transactions.filter((tx) => aiFilter.ids.has(tx.id))
+    }
     if (activeLedgerFilter === 'review') {
       return transactions.filter((tx) => tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id))
     }
     if (activeLedgerFilter === 'income') return transactions.filter((tx) => tx.amount > 0)
     if (activeLedgerFilter === 'expense') return transactions.filter((tx) => tx.amount < 0)
     return transactions
-  }, [transactions, activeLedgerFilter, reviewPinnedTxIds])
+  }, [transactions, activeLedgerFilter, reviewPinnedTxIds, aiFilter])
 
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
@@ -102,10 +111,27 @@ export default function TransactionTable() {
     >
       {/* Header */}
       <div className="sticky top-0 z-10 bg-surface-container-lowest/95 backdrop-blur px-5 py-4 border-b border-surface-container">
+        {/* AI 필터 배너 */}
+        {aiFilter && (
+          <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-primary/[0.07] border border-primary/20 rounded-xl animate-fade-in">
+            <div className="flex items-center gap-2 text-sm text-primary font-medium min-w-0">
+              <span className="material-symbols-outlined text-base shrink-0">smart_toy</span>
+              <span className="truncate">AI가 찾아준 내역: {aiFilter.label}</span>
+            </div>
+            <button
+              onClick={clearAiFilter}
+              className="shrink-0 flex items-center gap-1 text-[11px] text-outline hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+              필터 초기화
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap justify-between items-center gap-2">
           <div>
             <h3 key={ledgerContextTitle} className="font-bold text-base animate-fade-in">
-              {ledgerContextTitle}
+              {aiFilter ? `🤖 ${aiFilter.label} 검색 결과` : ledgerContextTitle}
             </h3>
             <p className="mt-1 text-[11px] text-on-surface-variant">
               내부 스크롤 대신 페이지를 그대로 내려 전체 원장을 이어서 볼 수 있어요.
@@ -217,9 +243,10 @@ export default function TransactionTable() {
 
                       <div className="ml-auto flex items-center gap-1.5 pr-1">
                         {isEditing(tx.id, 'account') ? (
-                          <InlineInput
+                          <AccountDropdown
                             value={draftValue}
                             setValue={setDraftValue}
+                            knownAccounts={knownAccounts}
                             onCommit={commitEdit}
                             onCancel={cancelEdit}
                           />
@@ -317,5 +344,75 @@ function InlineInput({ value, setValue, onCommit, onCancel }) {
       }}
       className="w-full px-2 py-1 text-xs border border-primary/30 rounded-md outline-none focus:ring-2 focus:ring-primary/20"
     />
+  )
+}
+
+function AccountDropdown({ value, setValue, knownAccounts = [], onCommit, onCancel }) {
+  const inputRef = useRef(null)
+  const [dropRect, setDropRect] = useState(null)
+
+  // 인풋 위치 계산 (overflow-hidden 부모 탈출용)
+  useEffect(() => {
+    if (inputRef.current) {
+      const r = inputRef.current.getBoundingClientRect()
+      setDropRect({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    }
+  }, [])
+
+  // 외부 클릭 시 확정
+  useEffect(() => {
+    const handler = (e) => {
+      if (inputRef.current && !inputRef.current.closest('[data-account-dropdown]')?.contains(e.target)) {
+        onCommit()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onCommit])
+
+  const filtered = knownAccounts.filter((a) =>
+    !value || a.toLowerCase().includes(value.toLowerCase()),
+  )
+
+  return (
+    <div data-account-dropdown="" className="relative">
+      <input
+        ref={inputRef}
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onCommit()
+          if (e.key === 'Escape') onCancel()
+        }}
+        placeholder="계정 입력..."
+        className="w-28 px-2 py-1 text-xs border border-primary/40 rounded-md outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+      />
+      {filtered.length > 0 && dropRect && createPortal(
+        <div
+          data-account-dropdown=""
+          style={{ position: 'fixed', top: dropRect.top, right: dropRect.right, zIndex: 9999 }}
+          className="bg-white border border-surface-container rounded-xl shadow-xl py-1 min-w-[130px] max-h-52 overflow-y-auto"
+        >
+          {filtered.map((acct) => (
+            <button
+              key={acct}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                setValue(acct)
+                setTimeout(onCommit, 0)
+              }}
+              className={`w-full text-left px-3 py-2 text-xs hover:bg-primary/10 transition-colors ${
+                value === acct ? 'text-primary font-bold bg-primary/5' : 'text-on-surface'
+              }`}
+            >
+              {acct}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
   )
 }

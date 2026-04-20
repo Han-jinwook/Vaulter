@@ -59,4 +59,10 @@ export const useUIStore = create((set) => ({
     set({ gmailHistoryClearedUntil: Date.now() + Math.max(3000, durationMs) }),
 
   clearGmailHistoryClearBadge: () => set({ gmailHistoryClearedUntil: null }),
+
+  // AI 비서가 query_ledger 실행 시 원장 필터링에 사용
+  // null = 필터 없음, object = { label, ids } 형태
+  aiFilter: null,
+  setAiFilter: (filter) => set({ aiFilter: filter }),
+  clearAiFilter: () => set({ aiFilter: null }),
 }))

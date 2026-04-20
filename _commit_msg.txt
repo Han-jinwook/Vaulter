@@ -1,0 +1,17 @@
+대화형 AI 재무 비서 구축 - Function Calling 기반 오케스트레이터 완성
+
+- chat-assistant.js: query_ledger / update_ledger / analyze_category_spending Tool 스키마 정의
+  excludeCategories, type, sortBy, account 파라미터로 복합 필터링 지원
+  analyze_category_spending: 통계/분석 전용 Tool (LLM 수학 할루시네이션 원천 차단)
+- AIChatPanel: 클라이언트 사이드 멀티턴 실행 루프 구현
+  query_ledger: JS 날짜 정규화 + 다중 필터 로컬 검색
+  analyze_category_spending: JS Array.reduce 카테고리별 합산 (GPT는 결과만 읽음)
+  update_ledger: updateTransactionInline 호출로 원장 즉시 리렌더
+  WINNER_CATEGORY 태그 파싱으로 aiFilter 자동 동기화
+  모든 입력을 executeAiChat으로 직통 (tier1 라우터 제거)
+- TransactionTable: aiFilter 기반 원장 필터링 + AI 배너 + 초기화 버튼 추가
+  AccountDropdown: createPortal + fixed 포지셔닝으로 overflow-hidden 탈출
+- uiStore: aiFilter / setAiFilter / clearAiFilter 상태 추가
+- vaultStore: addChatMessage 액션 추가
+- netlify.toml: /api/chat-assistant 라우팅 추가
+- TopNavBar: 디버그 로그 오버레이 제거

@@ -380,28 +380,6 @@ export default function TopNavBar() {
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      {import.meta.env.DEV && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 12,
-            left: 12,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.82)',
-            color: '#fff',
-            fontFamily: 'monospace',
-            fontSize: 11,
-            padding: '7px 10px',
-            borderRadius: 8,
-            lineHeight: 1.6,
-            pointerEvents: 'none',
-            userSelect: 'none',
-            whiteSpace: 'pre',
-          }}
-        >
-          {`[NavBar #${instanceIdRef.current}  r:${renderCountRef.current}]\nstore gmailConnectState : ${gmailConnectState ?? 'undefined'}\nstore gmailSyncPhase   : ${gmailSyncPhase}\nlocal connectState     : ${connectState}\nbutton connectLabel    : ${connectLabel}`}
-        </div>
-      )}
       <GoogleConnectModal
         isOpen={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}

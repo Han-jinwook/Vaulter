@@ -1,8 +1,81 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
-import { handleTier1Intent } from '../../ai/intentRouter'
+
+// 날짜 문자열 → YYYY-MM-DD 정규화 (다양한 포맷 대응)
+function normalizeDate(d) {
+  if (!d) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10)          // 2026-04-02
+  if (/^\d{4}\.\d{2}\.\d{2}/.test(d)) return d.slice(0, 10).replace(/\./g, '-') // 2026.04.02
+  if (/^\d{8}$/.test(d)) return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}` // 20260402
+  const parsed = new Date(d)
+  if (!isNaN(parsed)) return parsed.toISOString().slice(0, 10)
+  return d
+}
+
+// 로컬 원장 쿼리 (client-side tool 실행)
+function runQueryLedger(transactions, args) {
+  const { startDate, endDate, category, excludeCategories, account, merchant, type, sortBy = 'date_desc', minAmount, maxAmount, limit = 20 } = args
+  let results = [...transactions]
+
+  if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
+  if (endDate)   results = results.filter((tx) => normalizeDate(tx.date) <= endDate)
+  if (type === 'expense') results = results.filter((tx) => tx.amount < 0)
+  if (type === 'income')  results = results.filter((tx) => tx.amount > 0)
+  if (Array.isArray(excludeCategories) && excludeCategories.length > 0) {
+    const excl = excludeCategories.map((c) => c.toLowerCase())
+    results = results.filter((tx) => !excl.some((e) => tx.category?.toLowerCase().includes(e)))
+  }
+  if (category) {
+    const q = category.toLowerCase()
+    results = results.filter((tx) => tx.category?.toLowerCase().includes(q))
+  }
+  if (account) {
+    const q = account.toLowerCase()
+    results = results.filter((tx) => tx.account?.toLowerCase().includes(q))
+  }
+  if (merchant) {
+    const q = merchant.toLowerCase()
+    results = results.filter(
+      (tx) => tx.name?.toLowerCase().includes(q) || tx.merchant?.toLowerCase().includes(q),
+    )
+  }
+  if (minAmount != null) results = results.filter((tx) => Math.abs(tx.amount) >= minAmount)
+  if (maxAmount != null) results = results.filter((tx) => Math.abs(tx.amount) <= maxAmount)
+
+  const sorted = results.sort((a, b) => {
+    if (sortBy === 'amount_desc') return Math.abs(b.amount) - Math.abs(a.amount)
+    if (sortBy === 'amount_asc')  return Math.abs(a.amount) - Math.abs(b.amount)
+    if (sortBy === 'date_asc')    return normalizeDate(a.date).localeCompare(normalizeDate(b.date))
+    return normalizeDate(b.date).localeCompare(normalizeDate(a.date)) // date_desc
+  })
+
+  const mapped = sorted
+    .slice(0, Math.min(limit, 100))
+    .map((tx) => ({
+      id: tx.id,
+      date: normalizeDate(tx.date),
+      name: tx.name || tx.merchant || '(이름 없음)',
+      amount: tx.amount,
+      category: tx.category || '미분류',
+      account: tx.account || '',
+      status: tx.status,
+    }))
+
+  // GPT가 필터가 너무 좁은지 판단할 수 있도록 DB 전체 현황도 함께 반환
+  const allDates = transactions.map((t) => normalizeDate(t.date)).filter(Boolean).sort()
+  return {
+    count: mapped.length,
+    transactions: mapped,
+    _db: {
+      totalTransactions: transactions.length,
+      dateRange: allDates.length
+        ? `${allDates[0]} ~ ${allDates[allDates.length - 1]}`
+        : '데이터 없음',
+      categories: [...new Set(transactions.map((t) => t.category).filter(Boolean))],
+    },
+  }
+}
 
 export default function AIChatPanel() {
   const {
@@ -17,49 +90,224 @@ export default function AIChatPanel() {
     isProcessing,
     acknowledgeAlert,
     resolveLedgerReview,
-    setLedgerContextByFilter,
-    setLedgerAiReviewContext,
+    addChatMessage,
+    updateTransactionInline,
   } = useVaultStore()
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
   const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
+  const setAiFilter = useUIStore((s) => s.setAiFilter)
   const [input, setInput] = useState('')
+  const [isThinking, setIsThinking] = useState(false)
+  const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
   const bottomRef = useRef(null)
-  const navigate = useNavigate()
+  // OpenAI 대화 히스토리 (세션 내 유지, 미영속)
+  const conversationRef = useRef([])
+  // 이전 메시지 수 추적 — 길이가 늘어날 때만 하단 스크롤
+  const prevMsgCountRef = useRef(messages.length)
 
   const hoveredTx = hoveredTxId ? transactions.find((t) => t.id === hoveredTxId) : null
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const isNewMessage = messages.length > prevMsgCountRef.current
+    prevMsgCountRef.current = messages.length
+    if (isNewMessage || isThinking) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isThinking])
+
+  // ─── 클라이언트 사이드 Tool 실행 ───────────────────────────────────────────
+  const executeTool = useCallback(
+    (toolName, args) => {
+      if (toolName === 'query_ledger') {
+        const result = runQueryLedger(transactions, args)
+        const sum = Math.abs(result.transactions.reduce((s, t) => s + t.amount, 0))
+
+        // 결과가 있으면 원장 UI를 즉시 필터링
+        if (result.count > 0) {
+          const ids = new Set(result.transactions.map((t) => t.id))
+          const parts = [
+            args.startDate && args.endDate ? `${args.startDate} ~ ${args.endDate}` : null,
+            args.category || null,
+            args.merchant || null,
+          ].filter(Boolean)
+          setAiFilter({ label: parts.join(' · ') || 'AI 검색 결과', ids })
+        }
+
+        return {
+          ...result,
+          summary: result.count === 0
+            ? `해당 조건의 내역이 없습니다. (DB에는 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리 목록: ${result._db.categories.join(', ')})`
+            : `총 ${result.count}건, 합계 ₩${sum.toLocaleString()}`,
+        }
+      }
+
+      if (toolName === 'analyze_category_spending') {
+        const { startDate, endDate, excludeCategories: excl = [], type: txType = 'expense', topN = 5 } = args
+
+        // 1) 기간·타입 필터
+        let pool = [...transactions]
+        if (startDate) pool = pool.filter((t) => normalizeDate(t.date) >= startDate)
+        if (endDate)   pool = pool.filter((t) => normalizeDate(t.date) <= endDate)
+        // 분석은 기본적으로 지출(음수) 기준
+        if (txType === 'income') pool = pool.filter((t) => t.amount > 0)
+        else pool = pool.filter((t) => t.amount < 0)
+
+        // 2) 제외 카테고리 필터
+        if (excl.length > 0) {
+          const exclLower = excl.map((c) => c.toLowerCase())
+          pool = pool.filter((t) => !exclLower.some((e) => t.category?.toLowerCase().includes(e)))
+        }
+
+        // 3) JS로 카테고리별 합산 (절댓값) — LLM에게 수학 맡기지 않음
+        const categoryMap = pool.reduce((acc, t) => {
+          const cat = t.category || '미분류'
+          acc[cat] = (acc[cat] || 0) + Math.abs(t.amount)
+          return acc
+        }, {})
+
+        const ranked = Object.entries(categoryMap)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, topN)
+          .map(([category, total], idx) => ({ rank: idx + 1, category, total }))
+
+        const topCategory = ranked[0]?.category ?? null
+        const topAmount   = ranked[0]?.total ?? 0
+
+        // 4) 1위 카테고리를 원장 UI에 자동 표시
+        if (topCategory) {
+          const ids = new Set(
+            pool.filter((t) => t.category === topCategory).map((t) => t.id),
+          )
+          setAiFilter({ label: topCategory, ids })
+        }
+
+        return {
+          topCategory,
+          topAmount,
+          ranking: ranked,
+          totalTransactionsAnalyzed: pool.length,
+          note: '이 데이터는 클라이언트 JS가 직접 계산한 결과입니다. 수치를 그대로 읽어 브리핑하세요.',
+        }
+      }
+
+      if (toolName === 'update_ledger') {
+        const { txId, category } = args
+        const target = transactions.find((t) => t.id === String(txId))
+        if (!target) return { success: false, error: `ID ${txId}인 거래를 찾을 수 없습니다.` }
+        updateTransactionInline(String(txId), { category: String(category) })
+        return { success: true, txId, previousCategory: target.category, newCategory: category }
+      }
+
+      return { error: `알 수 없는 도구: ${toolName}` }
+    },
+    [transactions, updateTransactionInline, setAiFilter],
+  )
+
+  // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
+  const executeAiChat = useCallback(
+    async (userText) => {
+      // 1) 유저 메시지 UI 추가 + 히스토리에 기록
+      addChatMessage({ role: 'user', type: 'text', text: userText })
+      conversationRef.current.push({ role: 'user', content: userText })
+
+      setIsThinking(true)
+      setThinkingLabel('생각하는 중...')
+
+      try {
+        let safetyBreaker = 0
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          if (++safetyBreaker > 6) throw new Error('응답 루프가 너무 깁니다.')
+
+          // 매 요청마다 현재 원장 DB 현황을 함께 전송 (GPT가 계정·카테고리를 정확히 알게)
+          const allDates = transactions.map((t) => normalizeDate(t.date)).filter(Boolean).sort()
+          const dbContext = {
+            accounts: knownAccounts,
+            categories: [...new Set(transactions.map((t) => t.category).filter(Boolean))],
+            totalTransactions: transactions.length,
+            dateRange: allDates.length
+              ? `${allDates[0]} ~ ${allDates[allDates.length - 1]}`
+              : '데이터 없음',
+          }
+
+          const res = await fetch('/api/chat-assistant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: conversationRef.current, dbContext }),
+          })
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}))
+            throw new Error(errData?.error || `서버 오류 (${res.status})`)
+          }
+
+          const data = await res.json()
+
+          // 2) GPT가 Tool Call을 요청한 경우 → 로컬에서 실행
+          if (data.type === 'tool_call') {
+            conversationRef.current.push(data.assistantMessage)
+
+            for (const call of data.calls) {
+              const toolName = call.function.name
+              let args
+              try { args = JSON.parse(call.function.arguments) } catch { args = {} }
+
+              if (toolName === 'query_ledger') setThinkingLabel('금고를 뒤져보는 중...')
+              else if (toolName === 'update_ledger') setThinkingLabel('원장을 수정하는 중...')
+
+              const toolResult = executeTool(toolName, args)
+
+              conversationRef.current.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content: JSON.stringify(toolResult),
+              })
+            }
+            // 결과 보내고 다시 GPT 호출 (루프 継続)
+            setThinkingLabel('답변을 정리하는 중...')
+            continue
+          }
+
+          // 3) 최종 텍스트 답변
+          if (data.type === 'reply') {
+            // [WINNER_CATEGORY:카테고리명] 태그 파싱 → aiFilter 업데이트
+            const winnerMatch = data.text.match(/\[WINNER_CATEGORY:([^\]]+)\]/)
+            if (winnerMatch) {
+              const winnerCategory = winnerMatch[1].trim()
+              const ids = new Set(
+                transactions
+                  .filter((t) => t.category?.toLowerCase().includes(winnerCategory.toLowerCase()))
+                  .map((t) => t.id),
+              )
+              if (ids.size > 0) setAiFilter({ label: winnerCategory, ids })
+            }
+            // 태그를 제거한 깔끔한 텍스트만 채팅에 표시
+            const cleanText = data.text.replace(/\s*\[WINNER_CATEGORY:[^\]]+\]/g, '').trim()
+            addChatMessage({ role: 'ai', type: 'text', text: cleanText })
+            conversationRef.current.push({ role: 'assistant', content: data.text })
+            break
+          }
+
+          throw new Error('알 수 없는 응답 형식입니다.')
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : '답변 중 오류가 발생했습니다.'
+        addChatMessage({ role: 'ai', type: 'text', text: `죄송합니다. ${msg}` })
+      } finally {
+        setIsThinking(false)
+        setThinkingLabel('생각하는 중...')
+      }
+    },
+    [addChatMessage, executeTool],
+  )
 
   const handleSubmit = () => {
     const text = input.trim()
-    if (!text) return
-
-    handleTier1Intent(text, {
-      onRouteLedger: () => {
-        setLedgerContextByFilter('all')
-        navigate('/')
-        window.setTimeout(() => {
-          const target = document.getElementById('data-vault-ledger')
-          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
-      },
-      onAnalyzeUnclassified: () => {
-        const pendingRows = transactions.filter((tx) => tx.status === 'PENDING')
-        setLedgerAiReviewContext()
-        navigate('/')
-        window.setTimeout(() => {
-          const target = document.getElementById('data-vault-ledger')
-          target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
-        console.log(`[Intent] PENDING ${pendingRows.length}건 집중 검토 시작`)
-        pendingRows.forEach((tx) => askAboutTransaction(tx.id))
-      },
-      onGeneralChat: () => {},
-    })
-
+    if (!text || isThinking) return
+    // AI가 완전한 오케스트레이터 — 모든 입력을 executeAiChat으로 처리
+    // (기존 tier1 로컬 라우팅은 AI가 query_ledger로 대체)
+    executeAiChat(text)
     setInput('')
   }
 
@@ -100,6 +348,23 @@ export default function AIChatPanel() {
             onLedgerResolve={resolveLedgerReview}
           />
         ))}
+
+        {/* AI Thinking 버블 (로컬 상태, 미영속) */}
+        {isThinking && (
+          <div className="flex flex-col gap-1 max-w-[85%] animate-fade-in">
+            <div className="bg-surface-container-low p-4 rounded-2xl rounded-tl-none">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-primary/70 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-primary/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span className="text-on-surface-variant text-xs font-medium">{thinkingLabel}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -129,8 +394,9 @@ export default function AIChatPanel() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSubmit()
             }}
-            className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm py-2 placeholder:text-outline-variant"
-            placeholder="검색, 질문, 기록 등 무엇이든 지시하세요..."
+            disabled={isThinking}
+            className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm py-2 placeholder:text-outline-variant disabled:opacity-50"
+            placeholder={isThinking ? thinkingLabel : '검색, 질문, 기록 등 무엇이든 지시하세요...'}
           />
           <button
             onClick={isChartMode ? restoreTrinityMode : openVizMode}

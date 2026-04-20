@@ -123,6 +123,7 @@ type VaultState = {
     sourceLabel: string,
     items: DocumentParseResult[]
   ) => IngestDocumentBatchResult
+  addChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   exportBackupSnapshot: () => VaultBackupSnapshot
   restoreFromBackupSnapshot: (snapshot: VaultBackupSnapshot) => void
   syncPendingFromBackgroundQueue: () => Promise<number>
@@ -742,6 +743,21 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       insertedCount: nextTxs.length,
       insertedTxIds: nextTxs.map((tx) => tx.id),
     }
+  },
+
+  addChatMessage: (msg) => {
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        {
+          ...msg,
+          id: ++_id,
+          role: (msg.role as ChatRole) || 'ai',
+          type: (msg.type as ChatType) || 'text',
+          time: timeNow(),
+        } as ChatMessage,
+      ],
+    }))
   },
 
   exportBackupSnapshot: () => {

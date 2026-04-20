@@ -22,3 +22,8 @@
   to = "/.netlify/functions/analyze-document"
   status = 200
 
+[[redirects]]
+  from = "/api/chat-assistant"
+  to = "/.netlify/functions/chat-assistant"
+  status = 200
+
