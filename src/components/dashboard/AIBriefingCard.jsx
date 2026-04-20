@@ -26,9 +26,11 @@ function percent(current, target) {
 export default function AIBriefingCard() {
   const transactions = useVaultStore((s) => s.transactions)
   const isChartMode = useUIStore((s) => s.isChartMode)
+  const openVizMode = useUIStore((s) => s.openVizMode)
+  const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col min-h-[420px] transition-all duration-500 ease-in-out">
+    <div className="bg-surface-container-lowest rounded-xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[420px] overflow-hidden transition-all duration-500 ease-in-out">
       {!isChartMode ? (
         <>
           <div className="flex justify-between items-start mb-6">
@@ -41,6 +43,15 @@ export default function AIBriefingCard() {
                 <p className="text-[10px] text-outline font-medium">오늘도 한 걸음씩 쌓이는 금고 플랜</p>
               </div>
             </div>
+            {/* 시각화 토글 버튼 — 우상단 */}
+            <button
+              onClick={openVizMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors active:scale-95 text-[11px] font-bold"
+              title="데이터 시각화 열기"
+            >
+              <span className="material-symbols-outlined text-[14px]">radio_button_checked</span>
+              데이터 시각화
+            </button>
           </div>
 
           <div className="grid gap-4">
@@ -85,14 +96,19 @@ export default function AIBriefingCard() {
         <>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-bold text-lg">AI 시각화 스크린</h2>
+              <h2 className="font-bold text-lg">데이터 시각화</h2>
               <p className="text-[10px] text-outline font-medium">대화 맥락 기반 자금 흐름 분석</p>
             </div>
-            <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
-              visualization mode
-            </span>
+            <button
+              onClick={restoreTrinityMode}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90 transition-colors active:scale-95 text-[11px] font-bold"
+              title="시각화 닫기"
+            >
+              <span className="material-symbols-outlined text-[14px]">radio_button_checked</span>
+              시각화 닫기
+            </button>
           </div>
-          <VaultSankeyCard transactions={transactions} chartHeight={320} />
+          <VaultSankeyCard transactions={transactions} chartHeight={280} />
         </>
       )}
     </div>

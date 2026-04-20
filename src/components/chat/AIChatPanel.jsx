@@ -97,10 +97,13 @@ export default function AIChatPanel() {
   const openVizMode = useUIStore((s) => s.openVizMode)
   const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
   const setAiFilter = useUIStore((s) => s.setAiFilter)
+  const setVizFilter = useUIStore((s) => s.setVizFilter)
+  const clearVizFilter = useUIStore((s) => s.clearVizFilter)
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
-  const bottomRef = useRef(null)
+  // 채팅 메시지 스크롤 컨테이너 ref (페이지 전체 scroll 방지)
+  const msgContainerRef = useRef(null)
   // OpenAI 대화 히스토리 (세션 내 유지, 미영속)
   const conversationRef = useRef([])
   // 이전 메시지 수 추적 — 길이가 늘어날 때만 하단 스크롤
@@ -108,13 +111,27 @@ export default function AIChatPanel() {
 
   const hoveredTx = hoveredTxId ? transactions.find((t) => t.id === hoveredTxId) : null
 
+  // 채팅 컨테이너 내부만 스크롤 (scrollIntoView는 페이지 전체를 움직이므로 사용 안 함)
+  const scrollChatToBottom = useCallback((smooth = true) => {
+    const el = msgContainerRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' })
+  }, [])
+
+  // 초기 마운트 시 채팅창 하단으로 즉시 이동
+  useEffect(() => {
+    scrollChatToBottom(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 새 메시지 추가 or 생각 중일 때만 하단 스크롤
   useEffect(() => {
     const isNewMessage = messages.length > prevMsgCountRef.current
     prevMsgCountRef.current = messages.length
     if (isNewMessage || isThinking) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      scrollChatToBottom(true)
     }
-  }, [messages, isThinking])
+  }, [messages, isThinking, scrollChatToBottom])
 
   // ─── 클라이언트 사이드 Tool 실행 ───────────────────────────────────────────
   const executeTool = useCallback(
@@ -199,9 +216,20 @@ export default function AIChatPanel() {
         return { success: true, txId, previousCategory: target.category, newCategory: category }
       }
 
+      if (toolName === 'render_visualization') {
+        const { startDate, endDate, label } = args
+        if (startDate && endDate) {
+          setVizFilter({ startDate, endDate, label: label || `${startDate} ~ ${endDate}` })
+        } else {
+          clearVizFilter()
+        }
+        openVizMode()
+        return { success: true, message: `${label || '지정 기간'} 지출 분석 화면을 열었습니다.` }
+      }
+
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, setAiFilter],
+    [transactions, updateTransactionInline, setAiFilter, openVizMode, setVizFilter, clearVizFilter],
   )
 
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
@@ -255,6 +283,7 @@ export default function AIChatPanel() {
 
               if (toolName === 'query_ledger') setThinkingLabel('금고를 뒤져보는 중...')
               else if (toolName === 'update_ledger') setThinkingLabel('원장을 수정하는 중...')
+              else if (toolName === 'render_visualization') setThinkingLabel('시각화를 여는 중...')
 
               const toolResult = executeTool(toolName, args)
 
@@ -334,7 +363,7 @@ export default function AIChatPanel() {
       </div>
 
       {/* Messages */}
-      <div className="flex-grow overflow-y-auto p-4 space-y-3 text-sm custom-scrollbar">
+      <div ref={msgContainerRef} className="flex-grow overflow-y-auto p-4 space-y-3 text-sm custom-scrollbar">
         {messages.map((msg) => (
           <ChatBubble
             key={msg.id}
@@ -365,7 +394,6 @@ export default function AIChatPanel() {
           </div>
         )}
 
-        <div ref={bottomRef} />
       </div>
 
       {/* Hover Context Chip */}
@@ -398,17 +426,6 @@ export default function AIChatPanel() {
             className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm py-2 placeholder:text-outline-variant disabled:opacity-50"
             placeholder={isThinking ? thinkingLabel : '검색, 질문, 기록 등 무엇이든 지시하세요...'}
           />
-          <button
-            onClick={isChartMode ? restoreTrinityMode : openVizMode}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors active:scale-95 shrink-0 mr-2 ${
-              isChartMode
-                ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
-            }`}
-            title="데이터 시각화"
-          >
-            <span className="material-symbols-outlined text-lg">radio_button_checked</span>
-          </button>
           <button
             onClick={handleSubmit}
             className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-105 transition-transform active:scale-95 shrink-0"

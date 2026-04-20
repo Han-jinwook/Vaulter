@@ -57,7 +57,8 @@ function buildSystemPrompt() {
    [WINNER_CATEGORY:카테고리명]
    예) "가장 많이 쓴 카테고리는 식비입니다. [WINNER_CATEGORY:식비]"
 7. 말투는 전문적이고 간결하게. 한국어로만 답변해라.
-8. 금액은 반드시 ₩ 기호와 천 단위 구분 쉼표를 사용해라.`
+8. 금액은 반드시 ₩ 기호와 천 단위 구분 쉼표를 사용해라.
+9. 유저가 "자금 흐름도", "흐름도", "차트", "시각화", "Sankey" 등을 요청하면 반드시 render_visualization을 호출해라.`
 }
 
 // ─── Tool 스키마 ─────────────────────────────────────────────────────────────
@@ -146,6 +147,31 @@ const TOOLS = [
           topN: {
             type: 'number',
             description: '상위 N개 카테고리만 반환. 기본값 5',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'render_visualization',
+      description:
+        '지출 분석 시각화(도넛 차트) 화면을 열고 특정 기간 데이터를 표시한다. 유저가 "흐름도", "차트", "시각화", "지출 분석" 등을 요청하면 반드시 호출해라. 기간이 언급되면 startDate/endDate를 계산해서 전달해라.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: {
+            type: 'string',
+            description: '조회 시작 날짜 (YYYY-MM-DD). 예: "3월" → 2026-03-01',
+          },
+          endDate: {
+            type: 'string',
+            description: '조회 종료 날짜 (YYYY-MM-DD). 예: "3월" → 2026-03-31',
+          },
+          label: {
+            type: 'string',
+            description: '차트 상단에 표시할 기간 레이블. 예: "3월", "지난달", "최근 7일"',
           },
         },
       },

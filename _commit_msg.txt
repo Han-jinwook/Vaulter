@@ -1,10 +1,7 @@
-Phase 1: AssetCard 실데이터 연결 - 누적 가용 자금 실시간 집계
+feat: AI 시각화 연동 강화 및 UI 개선
 
-- vaultSelectors.js: useAssetStats hook 추가
-  누적 가용 자금 / 이번 달 금고 결산 / 이번 달 총 지출 / 전월 대비 지출 증감률
-  TRANSFER 타입 집계 제외, useMemo 성능 최적화
-  formatKRW / getCurrentMonthLabel 유틸 추가
-- AssetCard.jsx: 하드코딩 숫자 -> useAssetStats 실시간 집계값으로 전면 교체
-  데이터 없을 때 Fallback UI 처리
-  지출 증가 시 빨강 / 감소 시 파랑 배지 자동 전환
-  날짜 레이블 현재 날짜 자동 반영
+- render_visualization 도구에 startDate/endDate/label 파라미터 추가, AI가 특정 월 요청 시 해당 기간 데이터를 차트에 반영
+- uiStore에 vizFilter 상태 추가, VaultSankeyCard가 AI 지정 기간으로 필터링
+- 시각화 토글 버튼을 채팅창에서 중간 패널 우상단으로 이동, 데이터 시각화/시각화 닫기 텍스트 표시
+- 차트 소제목을 수입/지출 데이터 구성과 기간에 따라 동적으로 변경
+- 구분선 cursor-col-resize 제거 및 좌우 여백 축소, 채팅창 우측 여백 절반 감소

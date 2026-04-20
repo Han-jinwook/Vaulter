@@ -66,4 +66,9 @@ export const useUIStore = create((set) => ({
   setAiFilter: (filter) => set({ aiFilter: filter }),
   clearAiFilter: () => set({ aiFilter: null }),
 
+  // AI render_visualization 호출 시 차트 기간 지정
+  // null = 차트 내 토글 버튼 사용, { startDate, endDate, label } = AI 지정 기간
+  vizFilter: null,
+  setVizFilter: (f) => set({ vizFilter: f }),
+  clearVizFilter: () => set({ vizFilter: null }),
 }))
