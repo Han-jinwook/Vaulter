@@ -27,3 +27,8 @@
   to = "/.netlify/functions/chat-assistant"
   status = 200
 
+[[redirects]]
+  from = "/api/chat-assistant-assets"
+  to = "/.netlify/functions/chat-assistant-assets"
+  status = 200
+

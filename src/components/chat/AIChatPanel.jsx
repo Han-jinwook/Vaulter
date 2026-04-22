@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import IsolatedChatComposer from './IsolatedChatComposer'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
+import { CHAT_PANEL_ASIDE_LAYOUT } from './chatPanelAsideLayout'
 
 // 날짜 문자열 → YYYY-MM-DD 정규화 (다양한 포맷 대응)
 function normalizeDate(d) {
@@ -99,7 +101,6 @@ export default function AIChatPanel() {
   const setAiFilter = useUIStore((s) => s.setAiFilter)
   const setVizFilter = useUIStore((s) => s.setVizFilter)
   const clearVizFilter = useUIStore((s) => s.clearVizFilter)
-  const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
   // 채팅 메시지 스크롤 컨테이너 ref
@@ -157,13 +158,27 @@ export default function AIChatPanel() {
     }
   }, [])
 
-  // 초기 마운트: 즉시 하단으로 이동 후 날짜 동기화
+  // 초기 마운트: 빈 DOM일 수 있어 보조만
   useEffect(() => {
     scrollChatToBottom(false)
-    // 렌더 후 날짜 반영
     requestAnimationFrame(() => syncHeaderDate())
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // IndexedDB 등으로 메시지가 늦게 들어온 뒤에도 맨 아래로 (새로고침·앱 진입)
+  useLayoutEffect(() => {
+    if (messages.length === 0) return
+    const run = () => {
+      scrollChatToBottom(false)
+      syncHeaderDate()
+    }
+    run()
+    const id = requestAnimationFrame(() => {
+      run()
+      requestAnimationFrame(run)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [messages.length, scrollChatToBottom, syncHeaderDate])
 
   // load more 후 스크롤 위치 복원
   useEffect(() => {
@@ -397,17 +412,15 @@ export default function AIChatPanel() {
     [addChatMessage, executeTool],
   )
 
-  const handleSubmit = () => {
-    const text = input.trim()
-    if (!text || isThinking) return
-    // AI가 완전한 오케스트레이터 — 모든 입력을 executeAiChat으로 처리
-    // (기존 tier1 로컬 라우팅은 AI가 query_ledger로 대체)
-    executeAiChat(text)
-    setInput('')
-  }
+  // executeAiChat가 의존성으로 바뀌어도 composer는 리렌더·IME 충돌이 없게 항상 동일한 콜백 참조만 전달
+  const onSendHandlerRef = useRef(executeAiChat)
+  onSendHandlerRef.current = executeAiChat
+  const stableOnSend = useCallback((t) => onSendHandlerRef.current(t), [])
 
   return (
-    <aside className="w-[360px] shrink-0 self-start lg:sticky lg:top-24 max-h-[calc(100vh-7rem)] bg-surface-container-lowest/80 backdrop-blur-xl rounded-xl shadow-2xl flex flex-col overflow-hidden hidden lg:flex">
+    <aside
+      className={`${CHAT_PANEL_ASIDE_LAYOUT} bg-surface-container-lowest/80 backdrop-blur-xl rounded-t-3xl rounded-b-2xl shadow-2xl border border-surface-container/30`}
+    >
       {/* Header */}
       <div className="px-4 py-3 border-b border-surface-container">
         <div className="flex items-center justify-between gap-2">
@@ -497,27 +510,13 @@ export default function AIChatPanel() {
         </div>
       )}
 
-      {/* Input — 금고 테마 */}
-      <div className="p-3 pt-2">
-        <div className="flex items-center bg-[#0f172a] rounded-2xl px-3 py-1 border border-[#FFD700]/30 shadow-[0_0_12px_rgba(255,215,0,0.08)] focus-within:border-[#FFD700]/60 focus-within:shadow-[0_0_20px_rgba(255,215,0,0.18)] transition-all">
-          <span className="material-symbols-outlined text-[#FFD700]/50 text-[16px] mr-2 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
-            disabled={isThinking}
-            className="w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm py-2 text-white/90 placeholder:text-white/50 disabled:opacity-50"
-            placeholder={isThinking ? thinkingLabel : '금고에 무엇이든 지시하세요...'}
-          />
-          <button
-            onClick={handleSubmit}
-            className="w-8 h-8 bg-gradient-to-br from-[#FFD700] to-[#F59E0B] text-[#1a1109] rounded-xl flex items-center justify-center shadow-lg shadow-[#FFD700]/30 hover:scale-105 transition-transform active:scale-95 shrink-0"
-          >
-            <span className="material-symbols-outlined text-[17px]">send</span>
-          </button>
-        </div>
-      </div>
+      <IsolatedChatComposer
+        variant="keeper"
+        disabled={isThinking}
+        thinkingLabel={thinkingLabel}
+        idlePlaceholder="금고 AI비서에게 무엇이든 지시하세요."
+        onSend={stableOnSend}
+      />
     </aside>
   )
 }

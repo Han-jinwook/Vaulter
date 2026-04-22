@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { AssetLine } from '../types/assetLine'
 import type { Transaction } from '../types/schema'
 import {
   analyzeDocumentWithGPT,
@@ -37,6 +38,9 @@ export type ChatMessage = {
   type: ChatType
   text: string
   time: string
+  createdAt?: string
+  /** 지기 탭 등 라우팅 유도 버튼 */
+  cta?: { label: string; to: string }
   resolved?: boolean
   txId?: number
   ledgerTxId?: number
@@ -86,11 +90,16 @@ export type VaultBackupSnapshot = {
   ledgerContextTitle: string
   activeLedgerFilter: LedgerFilter
   reviewPinnedTxIds: string[]
+  /** 황금자산(IndexedDB `assets`와 동기). 구버전 스냅샷에는 없을 수 있음 */
+  goldenAssetLines?: AssetLine[]
+  /** 황금자산 탭 전용 채팅 (지기 messages 와 분리) */
+  assetMessages?: ChatMessage[]
 }
 
 type VaultState = {
   transactions: VaultTransaction[]
   messages: ChatMessage[]
+  assetMessages: ChatMessage[]
   knownAccounts: string[]
   lastLedgerDecision: LedgerDecision | null
   ledgerContextTitle: string
@@ -124,6 +133,7 @@ type VaultState = {
     items: DocumentParseResult[]
   ) => IngestDocumentBatchResult
   addChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  addAssetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   exportBackupSnapshot: () => VaultBackupSnapshot
   restoreFromBackupSnapshot: (snapshot: VaultBackupSnapshot) => void
   syncPendingFromBackgroundQueue: () => Promise<number>
@@ -214,10 +224,15 @@ function buildDocumentSummaryText(sourceLabel: string, insertedCount: number, re
   return `"${sourceLabel}"에서 ${insertedCount}건을 검토 대기 상태로 반영했어요.`
 }
 
-function computeNextInternalId(transactions: VaultTransaction[], messages: ChatMessage[]) {
+function computeNextInternalId(
+  transactions: VaultTransaction[],
+  messages: ChatMessage[],
+  assetMessages: ChatMessage[] = [],
+) {
   const txMax = transactions.reduce((max, tx) => Math.max(max, Number(tx.id) || 0), 0)
   const msgMax = messages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
-  return Math.max(100, txMax, msgMax)
+  const assetMsgMax = assetMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
+  return Math.max(100, txMax, msgMax, assetMsgMax)
 }
 
 function buildPendingTxFromParsed(input: {
@@ -394,6 +409,7 @@ const initialMessages: ChatMessage[] = [
 export const useVaultStore = create<VaultState>((set, get) => ({
   transactions: initialTransactions,
   messages: initialMessages,
+  assetMessages: [],
   knownAccounts: [],
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
@@ -761,6 +777,22 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
+  addAssetChatMessage: (msg) => {
+    set((s) => ({
+      assetMessages: [
+        ...s.assetMessages,
+        {
+          ...msg,
+          id: ++_id,
+          role: (msg.role as ChatRole) || 'ai',
+          type: (msg.type as ChatType) || 'text',
+          time: timeNow(),
+          createdAt: new Date().toISOString(),
+        } as ChatMessage,
+      ],
+    }))
+  },
+
   exportBackupSnapshot: () => {
     const state = get()
     return {
@@ -768,6 +800,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       exportedAt: new Date().toISOString(),
       transactions: state.transactions,
       messages: state.messages,
+      assetMessages: state.assetMessages,
       knownAccounts: state.knownAccounts,
       lastLedgerDecision: state.lastLedgerDecision,
       ledgerContextTitle: state.ledgerContextTitle,
@@ -779,12 +812,14 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   restoreFromBackupSnapshot: (snapshot) => {
     const transactions = Array.isArray(snapshot?.transactions) ? snapshot.transactions : []
     const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : []
+    const assetMessages = Array.isArray(snapshot?.assetMessages) ? snapshot.assetMessages : []
     const knownAccounts = Array.isArray(snapshot?.knownAccounts) ? snapshot.knownAccounts : []
-    _id = computeNextInternalId(transactions, messages)
+    _id = computeNextInternalId(transactions, messages, assetMessages)
 
     set({
       transactions,
       messages,
+      assetMessages,
       knownAccounts,
       lastLedgerDecision: snapshot?.lastLedgerDecision || null,
       ledgerContextTitle: snapshot?.ledgerContextTitle || '데이터 원장 (전체)',

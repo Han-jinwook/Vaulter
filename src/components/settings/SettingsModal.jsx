@@ -10,7 +10,9 @@ import {
   MAX_DATED_BACKUPS,
 } from '../../lib/googleDriveSync'
 import { clearStoredGmailAuth } from '../../lib/gmailSync'
+import { buildFullBackupSnapshot } from '../../lib/backupSnapshot'
 import { writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
+import { useAssetStore } from '../../stores/assetStore'
 
 function formatDateTime(timestamp) {
   if (!timestamp) return '아직 백업 기록 없음'
@@ -38,7 +40,6 @@ export default function SettingsModal() {
     setGmailSyncState,
     setLastGmailSyncAt,
   } = useUIStore()
-  const exportBackupSnapshot = useVaultStore((s) => s.exportBackupSnapshot)
   const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
   const [isBusy, setIsBusy] = useState(false)
   const [hasSnapshot, setHasSnapshot] = useState(false)
@@ -100,7 +101,7 @@ export default function SettingsModal() {
     setIsBusy(true)
     setDriveBackupState('syncing', '개인 백업금고에 지금 백업하는 중...', driveBackupConnected)
     try {
-      const snapshot = exportBackupSnapshot()
+      const snapshot = buildFullBackupSnapshot()
       const uploaded = await uploadRotatedBackup(snapshot)
       const backupAt = new Date(uploaded.modifiedTime).getTime()
       setHasSnapshot(true)
@@ -123,7 +124,13 @@ export default function SettingsModal() {
     try {
       const snapshot = await downloadBackupById(fileId)
       restoreFromBackupSnapshot(snapshot)
-      await writeLocalVaultSnapshot(snapshot)
+      if (snapshot.goldenAssetLines !== undefined) {
+        await useAssetStore.getState().hydrateFromSnapshot(snapshot.goldenAssetLines)
+      } else {
+        // 구버전 백업: 황금자산 필드 없음 → 부자산은 비움(원장만 복원)
+        await useAssetStore.getState().hydrateFromSnapshot([])
+      }
+      await writeLocalVaultSnapshot(buildFullBackupSnapshot())
       setHasSnapshot(true)
       setDriveBackupState('success', `"${label}"으로 복원 완료`, true)
     } catch (error) {

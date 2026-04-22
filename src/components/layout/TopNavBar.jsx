@@ -11,19 +11,23 @@ import {
   setDigestHourPreference,
   validateGmailReadonlyAccess,
 } from '../../lib/gmailSync'
+import { buildFullBackupSnapshot } from '../../lib/backupSnapshot'
 import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
-import { clearLocalVaultSnapshot } from '../../lib/localVaultPersistence'
+import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
+import { useAssetStore } from '../../stores/assetStore'
 
 const EMPTY_SNAPSHOT = {
   version: 1,
   exportedAt: '',
   transactions: [],
   messages: [],
+  assetMessages: [],
   knownAccounts: [],
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
   activeLedgerFilter: 'all',
   reviewPinnedTxIds: [],
+  goldenAssetLines: [],
 }
 
 // DEV-only: 각 TopNavBar 인스턴스에 고유 ID를 부여해서 중복 마운트를 즉시 탐지한다
@@ -64,7 +68,6 @@ export default function TopNavBar() {
     clearGmailHistoryClearBadge,
     setDriveBackupState,
   } = useUIStore()
-  const exportBackupSnapshot = useVaultStore((s) => s.exportBackupSnapshot)
   const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
   const [resetState, setResetState] = useState('idle')
   const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
@@ -339,7 +342,7 @@ export default function TopNavBar() {
       const { driveBackupConnected } = useUIStore.getState()
       if (driveBackupConnected) {
         try {
-          await uploadRotatedBackup(exportBackupSnapshot(), 'pre-reset')
+          await uploadRotatedBackup(buildFullBackupSnapshot(), 'pre-reset')
         } catch (e) {
           console.warn('[Reset] pre-reset backup failed (계속 진행)', e)
         }
@@ -347,14 +350,16 @@ export default function TopNavBar() {
       // 2) Drive 연결 해제 — 이후 원장 변경이 Drive로 자동 업로드되지 않도록
       await disconnectDriveBackupVault()
       setDriveBackupState('idle', '', false)
-      // 3) 인메모리 원장 초기화 (Drive 이미 해제됐으므로 자동백업 안 됨)
+      // 3) 인메모리 원장·황금자산 초기화 (Drive 이미 해제됐으므로 자동백업 안 됨)
       restoreFromBackupSnapshot(EMPTY_SNAPSHOT)
-      // 4) IndexedDB 정리: 로컬 스냅샷, Gmail 기록, Gmail 토큰
+      await useAssetStore.getState().hydrateFromSnapshot([])
+      // 4) IndexedDB 정리: 로컬 스냅샷·자산 스토어, Gmail 기록, Gmail 토큰
       await Promise.all([
         clearLocalVaultSnapshot(),
         clearGmailSyncTestData(false),
         clearStoredGmailAuth(),
       ])
+      await writeLocalVaultSnapshot(buildFullBackupSnapshot())
       if (settled) return
       settled = true
       setLastGmailSyncAt(null)

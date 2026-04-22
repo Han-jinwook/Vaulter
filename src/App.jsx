@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { Routes, Route, Outlet } from 'react-router-dom'
+import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
+import AssetChatPanel from './components/chat/AssetChatPanel'
 import SettingsModal from './components/settings/SettingsModal'
 import DashboardPage from './pages/DashboardPage'
 import BudgetPage from './pages/BudgetPage'
@@ -11,8 +12,10 @@ import OnboardingPage from './pages/OnboardingPage'
 import FileUploadOverlay from './components/upload/FileUploadOverlay'
 import CreditChargeModal from './components/credit/CreditChargeModal'
 import { getDriveBackupStatus, uploadRotatedBackup } from './lib/googleDriveSync'
+import { buildFullBackupSnapshot } from './lib/backupSnapshot'
 import { readLocalVaultSnapshot, writeLocalVaultSnapshot } from './lib/localVaultPersistence'
 import { useUIStore } from './stores/uiStore'
+import { useAssetStore } from './stores/assetStore'
 import { useVaultStore } from './stores/vaultStore'
 
 function toSnapshotKey(snapshot) {
@@ -23,7 +26,11 @@ const IDLE_MS = 30_000       // 마지막 변경 후 30초 idle → Drive 백업
 const MAX_INTERVAL_MS = 5 * 60_000  // 5분 이상 지났으면 즉시 백업
 
 function isNonEmpty(s) {
-  return (s?.transactions?.length ?? 0) > 0 || (s?.messages?.length ?? 0) > 0
+  return (
+    (s?.transactions?.length ?? 0) > 0 ||
+    (s?.messages?.length ?? 0) > 0 ||
+    (s?.goldenAssetLines?.length ?? 0) > 0
+  )
 }
 
 export default function App() {
@@ -41,6 +48,7 @@ export default function App() {
 }
 
 function AppShell() {
+  const { pathname } = useLocation()
   const {
     isUploadModalOpen,
     isCreditModalOpen,
@@ -138,18 +146,22 @@ function AppShell() {
         if (!cancelled) {
           if (localSnapshot?.version) {
             useVaultStore.getState().restoreFromBackupSnapshot(localSnapshot)
+            await useAssetStore.getState().rehydrateAfterVaultSnapshotRead(localSnapshot.goldenAssetLines)
           } else {
             useVaultStore.getState().restoreFromBackupSnapshot({
               version: 1,
               exportedAt: new Date().toISOString(),
               transactions: [],
               messages: [],
+              assetMessages: [],
               knownAccounts: [],
               lastLedgerDecision: null,
               ledgerContextTitle: '데이터 원장 (전체)',
               activeLedgerFilter: 'all',
               reviewPinnedTxIds: [],
+              goldenAssetLines: [],
             })
+            await useAssetStore.getState().loadAssets()
           }
         }
       } catch (error) {
@@ -172,10 +184,10 @@ function AppShell() {
         console.warn('[DriveBackup] status bootstrap failed', error)
       }
 
-      let lastSerialized = toSnapshotKey(useVaultStore.getState().exportBackupSnapshot())
+      let lastSerialized = toSnapshotKey(buildFullBackupSnapshot())
 
-      unsubscribe = useVaultStore.subscribe(() => {
-        const snapshot = useVaultStore.getState().exportBackupSnapshot()
+      const pumpBackup = () => {
+        const snapshot = buildFullBackupSnapshot()
         const serialized = toSnapshotKey(snapshot)
         if (serialized === lastSerialized) return
         lastSerialized = serialized
@@ -193,7 +205,14 @@ function AppShell() {
           backupPersistTimerRef.current = null
           doFlushBackup(snapshot)
         }, delay)
-      })
+      }
+
+      const unsubVault = useVaultStore.subscribe(pumpBackup)
+      const unsubAssets = useAssetStore.subscribe(pumpBackup)
+      unsubscribe = () => {
+        unsubVault()
+        unsubAssets()
+      }
     }
 
     bootstrap()
@@ -307,8 +326,15 @@ function AppShell() {
         <div className="flex-grow min-w-0 flex flex-col gap-6">
           <Outlet />
         </div>
-        <div className="w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0" />
-        {isChatPanelOpen && <AIChatPanel />}
+        <div
+          className={
+            pathname === '/assets'
+              ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-amber-200/50 to-amber-100/30 border border-amber-300/40'
+              : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
+          }
+        />
+        {isChatPanelOpen &&
+          (pathname === '/assets' ? <AssetChatPanel /> : <AIChatPanel />)}
       </main>
 
       {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}

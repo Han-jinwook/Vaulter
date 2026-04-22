@@ -212,6 +212,23 @@ function parseTransactionDate(dateStr) {
 }
 
 /**
+ * 지기 원장 누적 가용(수입 − 지출, TRANSFER 제외). useAssetStats·자산 AI System Info에서 공통 사용.
+ */
+export function selectLedgerCumulativeBalance(transactions = []) {
+  let totalIncome = 0
+  let totalExpense = 0
+  for (const tx of transactions) {
+    if (tx.type === 'TRANSFER') continue
+    const d = parseTransactionDate(tx.date)
+    if (!d) continue
+    const amt = Number(tx.amount) || 0
+    if (tx.type === 'INCOME') totalIncome += amt
+    else if (tx.type === 'EXPENSE') totalExpense += Math.abs(amt)
+  }
+  return totalIncome - totalExpense
+}
+
+/**
  * 4개 재무 지표 집계 hook (AssetCard 전용)
  * - cumulativeBalance: 전체 수입 - 전체 지출 (누적 가용 자금)
  * - thisMonthFlow:     이번 달 수입 - 이번 달 지출
@@ -229,8 +246,6 @@ export function useAssetStats() {
     const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear
     const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1
 
-    let totalIncome = 0
-    let totalExpense = 0
     let thisMonthIncome = 0
     let thisMonthExpense = 0
     let lastMonthExpense = 0
@@ -240,9 +255,6 @@ export function useAssetStats() {
       const d = parseTransactionDate(tx.date)
       if (!d) continue
       const amt = Number(tx.amount) || 0
-
-      if (tx.type === 'INCOME') totalIncome += amt
-      else if (tx.type === 'EXPENSE') totalExpense += Math.abs(amt)
 
       if (d.getFullYear() === thisYear && d.getMonth() === thisMonth) {
         if (tx.type === 'INCOME') thisMonthIncome += amt
@@ -255,7 +267,7 @@ export function useAssetStats() {
 
     return {
       hasData: transactions.length > 0,
-      cumulativeBalance: totalIncome - totalExpense,
+      cumulativeBalance: selectLedgerCumulativeBalance(transactions),
       thisMonthFlow: thisMonthIncome - thisMonthExpense,
       thisMonthIncome,
       thisMonthExpense,

@@ -50,7 +50,7 @@ export default function AssetCard({ isExpanded = true }) {
   if (!isExpanded) {
     return (
       <div
-        className="bg-surface-container-lowest rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] min-h-[420px] h-full p-2 transition-all duration-500 ease-in-out flex flex-col items-center gap-2"
+        className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] min-h-[420px] h-full p-2 transition-all duration-500 ease-in-out flex flex-col items-center gap-2"
         onClick={restoreTrinityMode}
       >
         <button
@@ -77,7 +77,7 @@ export default function AssetCard({ isExpanded = true }) {
   }
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between relative overflow-hidden group min-h-[420px]">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between relative overflow-hidden group min-h-[420px]">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 p-6 opacity-[0.07] group-hover:scale-110 transition-transform duration-500">
         <span className="material-symbols-outlined text-primary" style={{ fontSize: '140px' }}>

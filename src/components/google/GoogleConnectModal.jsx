@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
-import { useVaultStore } from '../../stores/vaultStore'
 import { connectGoogleWorkspace } from '../../lib/googleIntegration'
 import { setDigestHourPreference, validateGmailReadonlyAccess } from '../../lib/gmailSync'
+import { buildFullBackupSnapshot } from '../../lib/backupSnapshot'
 import { uploadBackupSnapshot, validateDriveAppDataAccess } from '../../lib/googleDriveSync'
 
 export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
   const { setDriveBackupState, setLastDriveBackupAt, setGmailSyncState } = useUIStore()
-  const exportBackupSnapshot = useVaultStore((s) => s.exportBackupSnapshot)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -28,7 +27,7 @@ export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
         setDigestHourPreference(20),
       ])
 
-      const snapshot = exportBackupSnapshot()
+      const snapshot = buildFullBackupSnapshot()
       const uploaded = await uploadBackupSnapshot(snapshot)
       setLastDriveBackupAt(new Date(uploaded.modifiedTime).getTime())
       setDriveBackupState('success', '개인 백업금고 연결 및 초기 백업 완료', true)

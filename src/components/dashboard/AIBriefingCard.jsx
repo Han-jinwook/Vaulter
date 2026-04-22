@@ -30,7 +30,7 @@ export default function AIBriefingCard() {
   const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[420px] overflow-hidden transition-all duration-500 ease-in-out">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[420px] overflow-hidden transition-all duration-500 ease-in-out">
       {!isChartMode ? (
         <>
           <div className="flex justify-between items-start mb-6">
