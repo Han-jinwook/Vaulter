@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { interRoomSystemSuffix } from './interRoomSystemSuffix.js'
 
 const ASSET_CATEGORIES = ['투자 자산', '부동산/보증금', '보험/연금', '기타 자산']
 const DEBT_CATEGORIES = ['대출', '개인 간 채무', '기타 부채']
@@ -89,7 +90,8 @@ function buildAssetSystemPrompt() {
 - id가 필요하면 assetContext에 나온 목록의 id를 그대로 사용한다.
 - 금액은 양수로 전달한다. 부채는 type=DEBT로 구분한다.
 - add_asset_item: 유저가 평단·담보·기간 등 보조 설명을 말하면 memo 파라미터에 담는다.
-- 실행 후 사용자에게 한두 문장으로 무엇을 반영했는지만 말한다.`
+- 실행 후 사용자에게 한두 문장으로 무엇을 반영했는지만 말한다.
+${interRoomSystemSuffix()}`
 }
 
 const TOOLS = [

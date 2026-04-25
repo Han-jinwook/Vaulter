@@ -71,4 +71,9 @@ export const useUIStore = create((set) => ({
   vizFilter: null,
   setVizFilter: (f) => set({ vizFilter: f }),
   clearVizFilter: () => set({ vizFilter: null }),
+
+  /** AI open_vault_document — 좌측 금고 뷰어+요약 */
+  vaultTheaterRequest: null,
+  setVaultTheaterRequest: (payload) => set({ vaultTheaterRequest: payload }),
+  clearVaultTheaterRequest: () => set({ vaultTheaterRequest: null }),
 }))

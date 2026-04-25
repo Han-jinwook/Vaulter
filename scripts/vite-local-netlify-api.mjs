@@ -8,6 +8,9 @@ import { join } from 'node:path'
 const ROUTES = {
   '/api/chat-assistant': 'chat-assistant.js',
   '/api/chat-assistant-assets': 'chat-assistant-assets.js',
+  '/api/chat-assistant-budget': 'chat-assistant-budget.js',
+  '/api/chat-assistant-vault': 'chat-assistant-vault.js',
+  '/api/vault-verify-pin': 'vault-verify-pin.js',
 }
 
 function readBody(req) {

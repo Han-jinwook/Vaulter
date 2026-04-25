@@ -3,6 +3,8 @@ import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
 import AssetChatPanel from './components/chat/AssetChatPanel'
+import BudgetChatPanel from './components/chat/BudgetChatPanel'
+import VaultChatPanel from './components/chat/VaultChatPanel'
 import SettingsModal from './components/settings/SettingsModal'
 import DashboardPage from './pages/DashboardPage'
 import BudgetPage from './pages/BudgetPage'
@@ -30,6 +32,10 @@ function isNonEmpty(s) {
   return (
     (s?.transactions?.length ?? 0) > 0 ||
     (s?.messages?.length ?? 0) > 0 ||
+    (s?.assetMessages?.length ?? 0) > 0 ||
+    (s?.budgetMessages?.length ?? 0) > 0 ||
+    (s?.vaultMessages?.length ?? 0) > 0 ||
+    (s?.secretVaultDocuments?.length ?? 0) > 0 ||
     (s?.goldenAssetLines?.length ?? 0) > 0
   )
 }
@@ -156,6 +162,9 @@ function AppShell() {
               transactions,
               messages: [],
               assetMessages: [],
+              budgetMessages: [],
+              vaultMessages: [],
+              secretVaultDocuments: [],
               knownAccounts: [],
               lastLedgerDecision: null,
               ledgerContextTitle: '데이터 원장 (전체)',
@@ -332,11 +341,23 @@ function AppShell() {
           className={
             pathname === '/assets'
               ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-amber-200/50 to-amber-100/30 border border-amber-300/40'
-              : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
+              : pathname === '/budget'
+                ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-emerald-500/50 to-teal-600/30 border border-emerald-400/40'
+                : pathname === '/vault'
+                  ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-slate-600/50 to-slate-800/50 border border-slate-500/50'
+                  : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
           }
         />
         {isChatPanelOpen &&
-          (pathname === '/assets' ? <AssetChatPanel /> : <AIChatPanel />)}
+          (pathname === '/assets' ? (
+            <AssetChatPanel />
+          ) : pathname === '/budget' ? (
+            <BudgetChatPanel />
+          ) : pathname === '/vault' ? (
+            <VaultChatPanel />
+          ) : (
+            <AIChatPanel />
+          ))}
       </main>
 
       {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}

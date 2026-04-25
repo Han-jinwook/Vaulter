@@ -13,6 +13,7 @@ import { clearStoredGmailAuth } from '../../lib/gmailSync'
 import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupSnapshot'
 import { writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
+import { isVaultPinConfigured, setVaultPin, clearVaultPin } from '../../lib/vaultPinClient'
 
 function formatDateTime(timestamp) {
   if (!timestamp) return '아직 백업 기록 없음'
@@ -46,6 +47,11 @@ export default function SettingsModal() {
   const [backupHistory, setBackupHistory] = useState([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [restoringId, setRestoringId] = useState(null)
+  const [vaultPinInput, setVaultPinInput] = useState('')
+  const [vaultPinMsg, setVaultPinMsg] = useState('')
+  const [hasVaultPin, setHasVaultPin] = useState(() => isVaultPinConfigured())
+  const [showAllBackupHistory, setShowAllBackupHistory] = useState(false)
+  const PREVIEW_BACKUP_COUNT = 2
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') closeSettingsModal() }
@@ -160,23 +166,83 @@ export default function SettingsModal() {
     }
   }
 
+  const hasMoreBackups = backupHistory.length > PREVIEW_BACKUP_COUNT
+  const historyRows = showAllBackupHistory
+    ? backupHistory
+    : backupHistory.slice(0, PREVIEW_BACKUP_COUNT)
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-6">
+    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto px-4 py-4 sm:py-8">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeSettingsModal} />
 
-      <div className="bg-surface-container-lowest w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col p-6 relative z-10">
+      <div className="bg-surface-container-lowest w-full max-w-lg max-h-[min(92vh,900px)] rounded-xl shadow-2xl flex flex-col min-h-0 p-5 sm:p-6 relative z-10 my-auto">
         <button
           onClick={closeSettingsModal}
-          className="absolute top-6 right-6 text-outline hover:text-on-surface transition-colors"
+          className="absolute top-4 right-4 sm:top-6 sm:right-6 text-outline hover:text-on-surface transition-colors z-20"
         >
           <span className="material-symbols-outlined">close</span>
         </button>
 
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-5 shrink-0 pr-8">
           <h2 className="text-xl font-bold text-on-surface mb-1">설정</h2>
           <p className="text-sm text-on-surface-variant">
             로컬 원장을 본진으로 두고, Google Drive appData 숨김 공간을 개인 백업금고로 사용합니다.
           </p>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 -mr-0.5 custom-scrollbar">
+
+        <div className="rounded-2xl bg-surface-container-low p-5 space-y-3 mb-4 border border-outline-variant/10">
+          <div className="text-sm font-bold text-on-surface">비밀금고 PIN</div>
+          <p className="text-xs text-on-surface-variant">
+            4~6자리 숫자. 등록 시 비밀금고 탭에 잠금이 적용됩니다. (서버·클라이언트는 동일 pepper로 해시; 환경변수{' '}
+            <code className="text-[11px]">VAULT_PIN_PEPPER</code> / <code className="text-[11px]">VITE_VAULT_PIN_PEPPER</code> 를 맞추세요)
+          </p>
+          {hasVaultPin && (
+            <p className="text-xs text-primary font-semibold">PIN이 등록된 상태입니다.</p>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={vaultPinInput}
+              onChange={(e) => setVaultPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="새 PIN (4~6자리)"
+              className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-outline-variant/20 text-sm bg-surface"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                setVaultPinMsg('')
+                try {
+                  await setVaultPin(vaultPinInput)
+                  setVaultPinInput('')
+                  setHasVaultPin(true)
+                  setVaultPinMsg('저장되었습니다.')
+                } catch (e) {
+                  setVaultPinMsg(e instanceof Error ? e.message : '저장 실패')
+                }
+              }}
+              className="px-4 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm font-bold"
+            >
+              PIN 저장
+            </button>
+            {hasVaultPin && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearVaultPin()
+                  setHasVaultPin(false)
+                  setVaultPinMsg('PIN을 제거했습니다.')
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant border border-outline-variant/30"
+              >
+                PIN 제거
+              </button>
+            )}
+          </div>
+          {vaultPinMsg && <p className="text-xs text-on-surface-variant">{vaultPinMsg}</p>}
         </div>
 
         <div className="rounded-2xl bg-surface-container-low p-5 space-y-4">
@@ -220,7 +286,7 @@ export default function SettingsModal() {
         </div>
 
         {driveBackupConnected && (
-          <div className="mt-6">
+          <div className="mt-5 sm:mt-6 pb-1">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-bold text-on-surface">백업 히스토리</div>
               <button
@@ -238,37 +304,57 @@ export default function SettingsModal() {
             ) : backupHistory.length === 0 ? (
               <div className="text-xs text-on-surface-variant py-4 text-center">저장된 백업 파일이 없습니다.</div>
             ) : (
-              <div className="rounded-xl border border-outline-variant/15 overflow-hidden">
-                {backupHistory.map((file, idx) => (
-                  <div
-                    key={file.id}
-                    className={`flex items-center justify-between px-4 py-3 gap-3 ${idx !== 0 ? 'border-t border-outline-variant/10' : ''}`}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-on-surface truncate">{file.label}</div>
-                      <div className="text-[11px] text-on-surface-variant mt-0.5">
-                        {new Date(file.modifiedTime).toLocaleString('ko-KR', {
-                          year: 'numeric', month: '2-digit', day: '2-digit',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRestoreFrom(file.id, file.label)}
-                      disabled={isBusy || restoringId === file.id}
-                      className="shrink-0 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold disabled:opacity-40 hover:bg-surface-container-high transition-colors"
+              <>
+                <div
+                  className={`rounded-xl border border-outline-variant/15 overflow-hidden ${
+                    showAllBackupHistory
+                      ? 'max-h-[min(40vh,320px)] overflow-y-auto custom-scrollbar'
+                      : ''
+                  }`}
+                >
+                  {historyRows.map((file, idx) => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center justify-between px-4 py-3 gap-3 ${idx !== 0 ? 'border-t border-outline-variant/10' : ''}`}
                     >
-                      {restoringId === file.id ? '복원 중...' : '복원'}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-on-surface truncate">{file.label}</div>
+                        <div className="text-[11px] text-on-surface-variant mt-0.5">
+                          {new Date(file.modifiedTime).toLocaleString('ko-KR', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRestoreFrom(file.id, file.label)}
+                        disabled={isBusy || restoringId === file.id}
+                        className="shrink-0 px-3 py-1.5 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold disabled:opacity-40 hover:bg-surface-container-high transition-colors"
+                      >
+                        {restoringId === file.id ? '복원 중...' : '복원'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {hasMoreBackups && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllBackupHistory((v) => !v)}
+                    className="mt-2 w-full py-2 text-center text-xs font-bold text-primary border border-primary/20 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors"
+                  >
+                    {showAllBackupHistory
+                      ? '접기 (최근 2건만)'
+                      : `히스토리 더 보기 (${backupHistory.length - PREVIEW_BACKUP_COUNT}개 더)`}
+                  </button>
+                )}
+              </>
             )}
             <div className="text-[11px] text-on-surface-variant mt-2">
               최근 {MAX_DATED_BACKUPS}개 스냅샷을 보존합니다. 초기화 전 안전 백업도 여기에 표시됩니다.
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

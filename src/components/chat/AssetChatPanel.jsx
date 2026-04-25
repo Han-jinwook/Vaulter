@@ -5,6 +5,7 @@ import { useAssetStore, selectAssetLines } from '../../stores/assetStore'
 import { selectLedgerCumulativeBalance } from '../../selectors/vaultSelectors'
 import { CHAT_PANEL_ASIDE_LAYOUT } from './chatPanelAsideLayout'
 import IsolatedChatComposer from './IsolatedChatComposer'
+import { MessageWithActionLinks } from './MessageWithActionLinks'
 import { parseYmdOrToday } from '../../lib/ymdDate'
 import { normalizeCategoryForType } from '../../lib/goldenAssetCategories'
 
@@ -406,7 +407,11 @@ export default function AssetChatPanel() {
                       : 'bg-[#1a1a1a] text-[#e8dcc8] border border-[#3d3520]/80 rounded-tl-sm'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed text-[13px]">{msg.text}</p>
+                  <MessageWithActionLinks
+                    text={msg.text}
+                    className="text-[13px] leading-relaxed"
+                    linkVariant="ember"
+                  />
                   {msg.cta && (
                     <Link
                       to={msg.cta.to}

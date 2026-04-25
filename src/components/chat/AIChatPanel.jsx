@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import IsolatedChatComposer from './IsolatedChatComposer'
+import { MessageWithActionLinks } from './MessageWithActionLinks'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
 import { CHAT_PANEL_ASIDE_LAYOUT } from './chatPanelAsideLayout'
@@ -902,7 +903,7 @@ function ChatBubble({
   return (
     <div className="flex items-end gap-1.5 max-w-[94%]">
       <div className="bg-surface-container-low text-on-surface px-3.5 py-2 rounded-2xl rounded-tl-none leading-relaxed">
-        {msg.text}
+        <MessageWithActionLinks text={msg.text} className="text-on-surface" />
       </div>
       <TimeStamp time={msg.time} dateLabel="" />
     </div>

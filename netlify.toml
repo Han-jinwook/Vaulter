@@ -32,3 +32,18 @@
   to = "/.netlify/functions/chat-assistant-assets"
   status = 200
 
+[[redirects]]
+  from = "/api/chat-assistant-budget"
+  to = "/.netlify/functions/chat-assistant-budget"
+  status = 200
+
+[[redirects]]
+  from = "/api/chat-assistant-vault"
+  to = "/.netlify/functions/chat-assistant-vault"
+  status = 200
+
+[[redirects]]
+  from = "/api/vault-verify-pin"
+  to = "/.netlify/functions/vault-verify-pin"
+  status = 200
+

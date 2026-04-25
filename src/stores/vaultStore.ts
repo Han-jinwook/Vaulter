@@ -87,6 +87,17 @@ type IngestDocumentBatchResult = {
   insertedTxIds: string[]
 }
 
+/** 비밀금고 탭 — 등록된 증빙 메타(Phase 1 로컬) */
+export type SecretVaultDocument = {
+  id: string
+  date: string
+  title: string
+  target: string
+  expiry_date: string | null
+  category: string
+  memo: string
+}
+
 export type VaultBackupSnapshot = {
   version: number
   exportedAt: string
@@ -101,12 +112,21 @@ export type VaultBackupSnapshot = {
   goldenAssetLines?: AssetLine[]
   /** 황금자산 탭 전용 채팅 (지기 messages 와 분리) */
   assetMessages?: ChatMessage[]
+  /** 예산&목표 탭 전용 채팅 (코치) */
+  budgetMessages?: ChatMessage[]
+  /** 비밀금고 탭 전용 채팅 */
+  vaultMessages?: ChatMessage[]
+  /** 비밀금고 문서 메타(로컬) */
+  secretVaultDocuments?: SecretVaultDocument[]
 }
 
 type VaultState = {
   transactions: VaultTransaction[]
   messages: ChatMessage[]
   assetMessages: ChatMessage[]
+  budgetMessages: ChatMessage[]
+  vaultMessages: ChatMessage[]
+  secretVaultDocuments: SecretVaultDocument[]
   knownAccounts: string[]
   lastLedgerDecision: LedgerDecision | null
   ledgerContextTitle: string
@@ -157,6 +177,9 @@ type VaultState = {
   ) => Promise<IngestDocumentBatchResult>
   addChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   addAssetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  addBudgetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  addVaultChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  addSecretVaultDocument: (doc: Omit<SecretVaultDocument, 'id'> & { id?: string }) => SecretVaultDocument
   exportBackupSnapshot: () => VaultBackupSnapshot
   restoreFromBackupSnapshot: (snapshot: VaultBackupSnapshot) => void
   syncPendingFromBackgroundQueue: () => Promise<number>
@@ -276,11 +299,15 @@ function computeNextInternalId(
   transactions: VaultTransaction[],
   messages: ChatMessage[],
   assetMessages: ChatMessage[] = [],
+  budgetMessages: ChatMessage[] = [],
+  vaultMessages: ChatMessage[] = [],
 ) {
   const txMax = transactions.reduce((max, tx) => Math.max(max, Number(tx.id) || 0), 0)
   const msgMax = messages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
   const assetMsgMax = assetMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
-  return Math.max(100, txMax, msgMax, assetMsgMax)
+  const budgetMsgMax = budgetMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
+  const vaultMsgMax = vaultMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
+  return Math.max(100, txMax, msgMax, assetMsgMax, budgetMsgMax, vaultMsgMax)
 }
 
 function buildPendingTxFromParsed(input: {
@@ -501,6 +528,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   transactions: initialTransactions,
   messages: initialMessages,
   assetMessages: [],
+  budgetMessages: [],
+  vaultMessages: [],
+  secretVaultDocuments: [],
   knownAccounts: [],
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
@@ -949,6 +979,56 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
+  addBudgetChatMessage: (msg) => {
+    set((s) => ({
+      budgetMessages: [
+        ...s.budgetMessages,
+        {
+          ...msg,
+          id: ++_id,
+          role: (msg.role as ChatRole) || 'ai',
+          type: (msg.type as ChatType) || 'text',
+          time: timeNow(),
+          createdAt: new Date().toISOString(),
+        } as ChatMessage,
+      ],
+    }))
+  },
+
+  addVaultChatMessage: (msg) => {
+    set((s) => ({
+      vaultMessages: [
+        ...s.vaultMessages,
+        {
+          ...msg,
+          id: ++_id,
+          role: (msg.role as ChatRole) || 'ai',
+          type: (msg.type as ChatType) || 'text',
+          time: timeNow(),
+          createdAt: new Date().toISOString(),
+        } as ChatMessage,
+      ],
+    }))
+  },
+
+  addSecretVaultDocument: (doc) => {
+    const id =
+      doc.id && String(doc.id).trim()
+        ? String(doc.id).trim()
+        : `sv-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    const row: SecretVaultDocument = {
+      id,
+      date: doc.date,
+      title: doc.title,
+      target: doc.target,
+      expiry_date: doc.expiry_date,
+      category: doc.category,
+      memo: doc.memo,
+    }
+    set((s) => ({ secretVaultDocuments: [...s.secretVaultDocuments, row] }))
+    return row
+  },
+
   exportBackupSnapshot: () => {
     const state = get()
     return {
@@ -957,6 +1037,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       transactions: state.transactions,
       messages: state.messages,
       assetMessages: state.assetMessages,
+      budgetMessages: state.budgetMessages,
+      vaultMessages: state.vaultMessages,
+      secretVaultDocuments: state.secretVaultDocuments,
       knownAccounts: state.knownAccounts,
       lastLedgerDecision: state.lastLedgerDecision,
       ledgerContextTitle: state.ledgerContextTitle,
@@ -969,13 +1052,21 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const transactions = Array.isArray(snapshot?.transactions) ? snapshot.transactions : []
     const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : []
     const assetMessages = Array.isArray(snapshot?.assetMessages) ? snapshot.assetMessages : []
+    const budgetMessages = Array.isArray(snapshot?.budgetMessages) ? snapshot.budgetMessages : []
+    const vaultMessages = Array.isArray(snapshot?.vaultMessages) ? snapshot.vaultMessages : []
+    const secretVaultDocuments = Array.isArray(snapshot?.secretVaultDocuments)
+      ? snapshot.secretVaultDocuments
+      : []
     const knownAccounts = Array.isArray(snapshot?.knownAccounts) ? snapshot.knownAccounts : []
-    _id = computeNextInternalId(transactions, messages, assetMessages)
+    _id = computeNextInternalId(transactions, messages, assetMessages, budgetMessages, vaultMessages)
 
     set({
       transactions,
       messages,
       assetMessages,
+      budgetMessages,
+      vaultMessages,
+      secretVaultDocuments,
       knownAccounts,
       lastLedgerDecision: snapshot?.lastLedgerDecision || null,
       ledgerContextTitle: snapshot?.ledgerContextTitle || '데이터 원장 (전체)',
