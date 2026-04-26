@@ -18,6 +18,18 @@ function normalizeDate(d) {
   return d
 }
 
+/** 계정 질문 전 팩트 한 줄 — `need_account_clarify` 턴에 모델이 그대로 인용 */
+function formatNeedAccountFactLine(summary) {
+  if (!summary) return ''
+  const ymd = summary.date != null && String(summary.date) !== '' ? normalizeDate(String(summary.date)) : ''
+  if (!ymd) return ''
+  const amountAbs = Math.abs(Number(summary.amount) || 0)
+  const won = `₩${amountAbs.toLocaleString('ko-KR')}`
+  const parts = [ymd, summary.memo, String(summary.detail_memo ?? '').trim(), won, summary.category]
+    .filter((x) => x != null && String(x).trim() !== '')
+  return parts.length ? `${parts.join(', ')}.` : ''
+}
+
 // 로컬 원장 쿼리 (client-side tool 실행)
 function runQueryLedger(transactions, args) {
   const { startDate, endDate, category, excludeCategories, account, merchant, type, sortBy = 'date_desc', minAmount, maxAmount, limit = 20 } = args
@@ -340,12 +352,17 @@ export default function AIChatPanel() {
         })
         if (!out.success) return out
         const needAccount = !String(args.account ?? '').trim()
+        const factLine = needAccount ? formatNeedAccountFactLine(out.summary) : ''
+        const clarifyNote = factLine
+          ? '【필수】`fact_line` 을 **첫째 줄**에 그대로 쓰고, **둘째 줄**에만 현금·카드(또는 이체/통장)를 묻는다. "날짜는 확인"·"적요·금액은 확인" 같은 **추상 멘트 금지**.'
+          : '【필수】`summary` (날짜·memo=적요·detail_memo·amount·category)로 `YYYY-MM-DD, 적요, (메모), ₩, 카테고리.` 한 줄을 **첫째 줄**에 쓰고, **둘째 줄**에만 결제수단을 묻는다. 추상 "확인" 멘트 금지.'
         return {
           success: true,
           ...out,
           need_account_clarify: needAccount,
+          ...(needAccount && factLine ? { fact_line: factLine } : {}),
           note: needAccount
-            ? '【필수】원장이 반영됨(계정 미지정). 이 응답 턴의 **끝**에, 현금·카드(또는 이체/통장) 중 **어떤 돈**으로 쓰셨는지 **꼭 한 문장**으로 질문할 것(인사만 하지 말 것).'
+            ? clarifyNote
             : '클라이언트에 원장이 반영되었습니다. summary로 사용자에게 보고하라.',
         }
       }
