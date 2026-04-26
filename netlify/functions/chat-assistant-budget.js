@@ -29,7 +29,78 @@ function loadApiKey() {
   }
 }
 
-function buildBudgetCfoSystemPrompt() {
+function formatWon(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—'
+  return `₩${Math.round(n).toLocaleString('ko-KR')}`
+}
+
+function buildLiveBudgetSnapshotBlock(budgetContext) {
+  if (budgetContext == null || typeof budgetContext !== 'object') {
+    return `【이번 달 실시간 예산 스냅샷】
+(앱이 budgetContext를 보내지 않았거나 파싱할 수 없다. **금액을 지어내지 말고** 일반적인 월간 재무·목표·습관 조언을 해라. 한도/소비액이 필요하면 "예산&목표 탭에서 월 한도를 설정·저장해 두면 이 비서에 반영된다"고 **부드럽게** 알려도 좋다.)`
+  }
+  const monthlyLimit = Number(budgetContext.monthlyLimit)
+  const currentSpent = Number(budgetContext.currentSpent)
+  const remaining = Number(budgetContext.remaining)
+  const isOverBudget = budgetContext.isOverBudget === true
+  const hasBudgetSet = budgetContext.hasBudgetSet === true
+  const isBudgetDangerLow = budgetContext.isBudgetDangerLow === true
+  const remainingRatio = budgetContext.remainingRatio
+
+  if (!Number.isFinite(currentSpent)) {
+    return `【이번 달 실시간 예산 스냅샷】
+(필드가 비어 있어 검증할 수 없다. **추정 금지**. 일반 조언.)`
+  }
+
+  const lines = []
+  if (hasBudgetSet && Number.isFinite(monthlyLimit) && monthlyLimit > 0) {
+    lines.push(`- **월 소비 한도(사용자 설정)**: ${formatWon(monthlyLimit)}`)
+  } else {
+    lines.push(
+      `- **월 소비 한도(설정)**: 없음(0) — "한도 초과" 판정을 하지 말 것. **이번 달 소비성 누적(원장)**만 인용.`,
+    )
+  }
+  lines.push(
+    `- **이번 달 소비성 지출 누적(원장, 카드·대출 상환 제외)**: ${formatWon(currentSpent)}`,
+  )
+  if (hasBudgetSet && Number.isFinite(monthlyLimit) && monthlyLimit > 0 && Number.isFinite(remaining)) {
+    lines.push(`- **남은 한도(한도−누적)**: ${formatWon(remaining)} (0 미만이면 한도 **초과**)`)
+    const over = remaining < 0 ? Math.abs(remaining) : 0
+    if (over > 0) {
+      lines.push(`- **초과액(소비 한도 대비)**: ${formatWon(over)}`)
+    }
+  }
+  lines.push(
+    `- **isOverBudget(한도 있음+누적>한도)**: ${isOverBudget ? 'true' : 'false'}`,
+  )
+  if (Number.isFinite(remainingRatio) && hasBudgetSet) {
+    lines.push(
+      `- **남은 비율(남은÷한도)**: ${(remainingRatio * 100).toFixed(1)}%`,
+    )
+  }
+  if (isBudgetDangerLow) {
+    lines.push(
+      `- **isBudgetDangerLow** (한도의 10% 미만이며 아직 isOverBudget 아님): true — 선제 경고 필요`,
+    )
+  }
+  return `【이번 달 실시간 예산 스냅샷(앱=BudgetPage+원장, 소비성만)】
+${lines.join('\n')}`
+}
+
+function buildIllusionBreakBlock() {
+  return `【착시 타파 — 최우선(스냅샷이 있을 때)】
+너는 **냉철한 CFO**다. **통장/현금 잔고**로 유저를 안심시키지 말고, **"이번 달 쓰기로 한 돈(소비 한도·누적)"**을 기준으로 말해라.
+
+1. **isOverBudget: true** (또는 남은 한도가 음수)일 때:
+   - 잔고가 남아 있어도 **"이미 이번 달 소비 예산을 OOO원 초과했다"**고 **강하게** 말해라 (OOO=스냅샷 **초과액** 또는 **−남은 한도**).
+   - "지금 쓰는 돈·추가 지출은 **다음 달 상환/추가 부채**로 이월될 수 있다"는 식의 **사실**을 붙이고, **결제 취소·연기**를 촉구.
+2. **isBudgetDangerLow: true** (한도 10% 미만, 아직 isOverBudget 아님):
+   - "예산이 **아슬아슬**하다. 카드 한 번이면 **한도를 태운다**" — 짧고 선제적 방어.
+
+(스냅샷/필드가 없거나 한도=0이면 1~2 **생략** — 일반 CFO 조언. 수치 **할루시네이션 금지**.)`
+}
+
+function buildBudgetCfoBasePrompt() {
   const now = new Date()
   const dateStr = now.toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -48,6 +119,7 @@ function buildBudgetCfoSystemPrompt() {
 【행동 지침 1: 미시적 통제 금지】
 - 사용자가 **단건 지출**만 말해도 과민 반응·호들갑·훈계하지 마라. 데이터가 전부 입력되지 않았을 수 있다.
 - 단건 지출만으로 "예산을 잘 지키고 있다" "목표에 가까워졌다"는 식의 **섣부른 판단·확정적 결론을 절대 내리지 마라**. 필요하면 "월 결산이 갖춰지면 그때 수치로 보겠다"는 태도를 유지해라.
+- **단,** 상단 \`【이번 달 실시간 예산 스냅샷】\` + \`【착시 타파】\`가 주어지고 **isOverBudget·isBudgetDangerLow**가 참이면, **이 지침보다 [착시 타파]가 우선**한다(그때는 잔고로 안심시키지 말 것).
 
 【행동 지침 2: 월 단위 결산 유도】
 - 대화의 포커스는 **일 단위**가 아니라 **월 단위 결산**이다. 사용자가 가계·정리·마감에 대해 말할 기미가 있으면, **부드럽게** 예를 들어
@@ -62,6 +134,17 @@ function buildBudgetCfoSystemPrompt() {
 【톤】
 - 여유·냉철·간결. 금액은 ₩와 천 단위 쉼표. **한국어**만.
 ${interRoomSystemSuffix()}`
+}
+
+function buildBudgetCfoSystemPrompt(budgetContext) {
+  const snap = buildLiveBudgetSnapshotBlock(budgetContext)
+  const illusion = buildIllusionBreakBlock()
+  const base = buildBudgetCfoBasePrompt()
+  return `${snap}
+
+${illusion}
+
+${base}`
 }
 
 const TOOLS = [
@@ -97,16 +180,12 @@ function trimHistory(messages) {
 
 function buildBudgetContextBlock(budgetContext) {
   if (!budgetContext || typeof budgetContext !== 'object') {
-    return '【예산/목표 컨텍스트】 (앱에서 아직 별도 요약이 없음 — 대화로 파악하고 add_goal_item 으로 기록해도 됨.)'
-  }
-  const keys = Object.keys(budgetContext)
-  if (keys.length === 0) {
-    return '【예산/목표 컨텍스트】 (비어 있음 — 대화에서 목표를 이끌어내고 add_goal_item 으로 정리해도 됨.)'
+    return '【부가: 클라이언트 JSON】 (없음 — add_goal_item 등은 대화 기준.)'
   }
   try {
-    return `【예산/목표 컨텍스트(클라이언트)]\n${JSON.stringify(budgetContext, null, 0).slice(0, 2000)}`
+    return `【부가: 클라이언트 budgetContext(원시 JSON)】\n${JSON.stringify(budgetContext).slice(0, 2000)}`
   } catch {
-    return '【예산/목표 컨텍스트】 (요약을 읽을 수 없음 — 대화 기준으로 진행.)'
+    return '【부가: 클라이언트 JSON】 (시리얼라이즈 실패 — 무시해도 됨.)'
   }
 }
 
@@ -140,7 +219,8 @@ export const handler = async (event) => {
   }
 
   const trimmedMessages = trimHistory(messages)
-  const contextMessage = { role: 'system', content: buildBudgetContextBlock(budgetContext) }
+  const systemMain = { role: 'system', content: buildBudgetCfoSystemPrompt(budgetContext) }
+  const systemExtra = { role: 'system', content: buildBudgetContextBlock(budgetContext) }
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -151,11 +231,7 @@ export const handler = async (event) => {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: buildBudgetCfoSystemPrompt() },
-          contextMessage,
-          ...trimmedMessages,
-        ],
+        messages: [systemMain, systemExtra, ...trimmedMessages],
         tools: TOOLS,
         tool_choice: 'auto',
         temperature: 0.28,

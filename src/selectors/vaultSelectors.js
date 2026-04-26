@@ -296,6 +296,52 @@ export function useAssetStats() {
   }, [transactions])
 }
 
+/**
+ * 이번 달 **소비성** 지출만(상환·이자/수수료 정책은 isConsumptiveLedgerExpense) — 카테고리별 합산.
+ * @returns Map<category, 합계원>
+ */
+export function selectThisMonthConsumptiveByCategory(transactions = []) {
+  const now = new Date()
+  const y = now.getFullYear()
+  const mo = now.getMonth()
+  const map = new Map()
+  for (const tx of transactions) {
+    if (tx.type !== 'EXPENSE' || !isConsumptiveLedgerExpense(tx)) continue
+    const d = parseTransactionDate(tx.date)
+    if (!d || d.getFullYear() !== y || d.getMonth() !== mo) continue
+    const cat = String(tx.category || '미분류').trim() || '미분류'
+    const abs = Math.abs(Number(tx.amount) || 0)
+    if (abs <= 0) continue
+    map.set(cat, (map.get(cat) || 0) + abs)
+  }
+  return map
+}
+
+/** API용: 이번 달 소비성 지출 합(원) — `useAssetStats`의 thisMonthExpense와 동일 식. */
+export function selectThisMonthConsumptiveExpenseTotal(transactions = []) {
+  const now = new Date()
+  const y = now.getFullYear()
+  const mo = now.getMonth()
+  let sum = 0
+  for (const tx of transactions) {
+    if (tx.type === 'TRANSFER') continue
+    const d = parseTransactionDate(tx.date)
+    if (!d || d.getFullYear() !== y || d.getMonth() !== mo) continue
+    if (tx.type === 'EXPENSE' && isConsumptiveLedgerExpense(tx)) {
+      sum += Math.abs(Number(tx.amount) || 0)
+    }
+  }
+  return sum
+}
+
+export function useThisMonthConsumptiveByCategory() {
+  const transactions = useVaultStore((s) => s.transactions)
+  return useMemo(
+    () => selectThisMonthConsumptiveByCategory(transactions),
+    [transactions],
+  )
+}
+
 /** 원화 포맷. 예: ₩1,234,567 */
 export function formatKRW(amount) {
   if (typeof amount !== 'number' || isNaN(amount)) return '—'

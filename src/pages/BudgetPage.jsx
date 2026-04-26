@@ -1,30 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useVaultStore } from '../stores/vaultStore'
 import { useUIStore } from '../stores/uiStore'
+import { getMonthlyBudgetTotalWon, setMonthlyBudgetTotalWon } from '../lib/budgetSettings'
+import {
+  useAssetStats,
+  useThisMonthConsumptiveByCategory,
+  formatKRW,
+  getCurrentMonthLabel,
+} from '../selectors/vaultSelectors'
 
 const alertOptions = ['한 달 전', '1주 전', '하루 전', '당일', '알림 끔']
 
-const initialRows = [
-  { id: 1, name: '아파트 관리비', kind: 'regular', amount: 250000, notify: '하루 전' },
-  { id: 2, name: '속도위반 벌금', kind: 'onetime', amount: 120000, notify: '1주 전' },
-  { id: 3, name: '가족 여행 예산', kind: 'onetime', amount: 1800000, notify: '한 달 전' },
-  { id: 4, name: '자동차 보험 갱신', kind: 'regular', amount: 98000, notify: '당일' },
-]
+/**
+ * 서포터 표: 앱 전용 로컬 UI 샘플(원장과 무관). 추후 별도 스키마/저장으로 이전 예정.
+ */
+const initialSupportRows = []
 
-const goalCards = [
-  { id: 1, emoji: '✈️', title: '올여름 하와이 가족 여행', current: 1850000, target: 3000000, dday: 'D-120' },
-  { id: 2, emoji: '💻', title: '업무용 노트북 업그레이드', current: 1275000, target: 1500000, dday: 'D-35' },
-  { id: 3, emoji: '🏠', title: '내 집 마련 초기 자금', current: 9200000, target: 20000000, dday: 'D-420' },
-]
-
-function pct(current, target) {
-  return Math.min(100, Math.round((current / target) * 100))
+function pctClamped(used, cap) {
+  if (!Number.isFinite(cap) || cap <= 0) return 0
+  return Math.min(100, (used / cap) * 100)
 }
 
 export default function BudgetPage() {
-  const [rows, setRows] = useState(initialRows)
+  const [rows, setRows] = useState(initialSupportRows)
+  const [budgetWon, setBudgetWon] = useState(0)
+  const [budgetInput, setBudgetInput] = useState('')
+
   const simulateEmailLanding = useVaultStore((s) => s.simulateEmailLanding)
   const openChatPanel = useUIStore((s) => s.openChatPanel)
+
+  const { thisMonthExpense, thisMonthOutflow, hasData } = useAssetStats()
+  const byCategory = useThisMonthConsumptiveByCategory()
+
+  const categoryRows = useMemo(() => {
+    return [...byCategory.entries()]
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+  }, [byCategory])
+
+  useEffect(() => {
+    const v = getMonthlyBudgetTotalWon()
+    setBudgetWon(v)
+    setBudgetInput(v > 0 ? String(v) : '')
+  }, [])
+
+  const applyBudget = useCallback(() => {
+    const raw = String(budgetInput).replace(/[^\d]/g, '')
+    const n = raw === '' ? 0 : Number.parseInt(raw, 10)
+    const next = Number.isFinite(n) && n >= 0 ? n : 0
+    setMonthlyBudgetTotalWon(next)
+    setBudgetWon(next)
+  }, [budgetInput])
+
+  const monthlySpent = thisMonthExpense
+  const hasCap = budgetWon > 0
+  const overBudget = hasCap && monthlySpent > budgetWon
+  const remain = hasCap ? Math.max(0, budgetWon - monthlySpent) : 0
+  const barPct = hasCap ? pctClamped(monthlySpent, budgetWon) : 0
+  const barClass = overBudget
+    ? 'bg-error'
+    : 'bg-primary'
 
   const setNotify = (id, notify) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, notify } : row)))
@@ -35,70 +70,141 @@ export default function BudgetPage() {
     simulateEmailLanding()
   }
 
-  const monthlyBudget = 3200000
-  const monthlySpent = 1845000
-  const monthlyRemain = monthlyBudget - monthlySpent
-  const monthlyPct = Math.round((monthlySpent / monthlyBudget) * 100)
-
   return (
     <section className="space-y-6">
-      {/* Hero: goals first */}
       <div className="bg-surface-container-lowest rounded-xl p-6 md:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
         <div>
           <p className="text-xs font-bold text-on-surface-variant tracking-widest uppercase">예산 & 목표</p>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">나의 꿈과 목표</h1>
-          <p className="text-sm text-on-surface-variant mt-1">가슴 뛰는 목표를 먼저 보고, 아래에서 지출/알림을 통제합니다.</p>
+          <p className="text-sm text-on-surface-variant mt-1">
+            아래 <strong>이번 달 소비 예산</strong>은 지기 원장(소비성 지출만)과 <strong>실시간</strong>으로 맞춰집니다. 카드
+            상환·대출 납부는 예산에서 제외됩니다.
+          </p>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {goalCards.map((goal) => {
-            const progress = pct(goal.current, goal.target)
-            return (
-              <article key={goal.id} className="bg-white rounded-2xl border border-surface-container shadow-sm p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-2xl">{goal.emoji}</div>
-                  <span className="text-xs font-bold text-outline">{goal.dday}</span>
-                </div>
-                <h3 className="font-bold text-sm leading-snug min-h-[38px]">{goal.title}</h3>
-                <div className="mt-3 w-full h-2.5 rounded-full bg-surface-container-low overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className="text-on-surface-variant">진행률 {progress}%</span>
-                  <span className="font-bold tabular-nums text-primary">
-                    ₩{goal.current.toLocaleString('ko-KR')} / ₩{goal.target.toLocaleString('ko-KR')}
-                  </span>
-                </div>
-              </article>
-            )
-          })}
+        <div className="mt-5 rounded-2xl border border-outline-variant/15 bg-surface-container-low/50 p-6 text-sm text-on-surface-variant">
+          <p>
+            <span className="font-bold text-on-surface">저축/목표 카드(진행률)</span>는 이후 스프린트에서 원장·목표
+            DB와 연동할 예정입니다. 지금은 <strong>월간 소비 한도</strong>와 <strong>원장 집계</strong>에 집중하세요.
+          </p>
         </div>
       </div>
 
-      {/* Monthly budget strip */}
-      <div className="bg-surface-container-lowest rounded-xl p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-        <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
-          <h2 className="text-lg font-bold">이번 달 가용 예산</h2>
-          <div className="text-sm font-bold tabular-nums">
-            <span className="text-on-surface-variant mr-2">잔액</span>
-            <span className="text-primary">₩{monthlyRemain.toLocaleString('ko-KR')}</span>
+      {/* 이번 달 소비 예산 — ledger_lines (소비성) 기준 */}
+      <div
+        className={`bg-surface-container-lowest rounded-xl p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border ${
+          overBudget ? 'border-error/50 ring-1 ring-error/20' : 'border-outline-variant/10'
+        }`}
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-1">
+          <div>
+            <h2 className="text-lg font-bold">이번 달 소비 예산 (원장 연동)</h2>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              {getCurrentMonthLabel()} · 소비성만 집계 (카드대금·대출 상환 제외)
+            </p>
+          </div>
+          <div className="text-right text-sm font-bold tabular-nums">
+            <span className="text-on-surface-variant mr-2">남은 한도</span>
+            <span className={overBudget ? 'text-error' : 'text-primary'}>
+              {hasCap ? `₩${remain.toLocaleString('ko-KR')}` : '—'}
+            </span>
           </div>
         </div>
+
+        <div className="flex flex-wrap items-end gap-2 mt-4 mb-3">
+          <label className="text-xs font-bold text-on-surface-variant">월 소비 한도 (원, 로컬 저장)</label>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="예: 3200000"
+              value={budgetInput}
+              onChange={(e) => setBudgetInput(e.target.value.replace(/[^\d]/g, ''))}
+              onBlur={applyBudget}
+              className="min-w-[160px] flex-1 sm:flex-none px-3 py-2 rounded-lg border border-outline-variant/20 text-sm bg-surface"
+            />
+            <button
+              type="button"
+              onClick={applyBudget}
+              className="px-4 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm font-bold"
+            >
+              적용
+            </button>
+          </div>
+        </div>
+
         <div className="w-full h-3 rounded-full bg-surface-container-low overflow-hidden">
-          <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${monthlyPct}%` }} />
+          {hasCap ? (
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barClass}`}
+              style={{ width: `${barPct}%` }}
+            />
+          ) : (
+            <div className="h-full w-0" />
+          )}
         </div>
-        <div className="mt-2 text-xs text-on-surface-variant">
-          ₩{monthlySpent.toLocaleString('ko-KR')} 사용 / 총 예산 ₩{monthlyBudget.toLocaleString('ko-KR')}
+
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+          <span>
+            소비 누적:{' '}
+            <strong className="text-on-surface tabular-nums">₩{monthlySpent.toLocaleString('ko-KR')}</strong>
+            {hasData ? '' : ' (원장이 비어 있으면 0)'}
+          </span>
+          {hasCap && (
+            <span>
+              한도: <strong className="tabular-nums">₩{budgetWon.toLocaleString('ko-KR')}</strong>
+            </span>
+          )}
         </div>
+
+        {overBudget && (
+          <p className="mt-3 text-sm font-bold text-error">
+            한도를 ₩{(monthlySpent - budgetWon).toLocaleString('ko-KR')} 초과했습니다. 통장에 남은 돈과 무관하게, 이번 달
+            &apos;쓰기로 한&apos; 액을 넘겼어요.
+          </p>
+        )}
+
+        {!hasCap && (
+          <p className="mt-2 text-xs text-on-surface-variant">
+            위에 월 한도를 입력·적용하면, 지기에서 기록한 <strong>소비성</strong> 지출이 차감된 막대가 표시됩니다.
+          </p>
+        )}
+
+        {hasData && thisMonthOutflow > monthlySpent && (
+          <p className="mt-2 text-[11px] text-on-surface-variant/80">
+            참고: 이번 달 전체 출금(상환·이자 등 포함)은 약 {formatKRW(thisMonthOutflow)} — 예산 막대에는
+            <strong> 소비</strong>만 반영됩니다.
+          </p>
+        )}
       </div>
 
-      {/* Alert table as supporter */}
+      {categoryRows.length > 0 && (
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+          <h2 className="text-lg font-bold mb-1">이번 달 소비 (카테고리별, 원장)</h2>
+          <p className="text-xs text-on-surface-variant mb-3">같은 달·소비성만 합산. 정렬: 금액 내림차순.</p>
+          <ul className="space-y-2">
+            {categoryRows.map(([cat, won]) => (
+              <li
+                key={cat}
+                className="flex items-center justify-between gap-3 rounded-lg border border-outline-variant/10 px-3 py-2.5 bg-surface/80"
+              >
+                <span className="text-sm font-semibold text-on-surface">{cat}</span>
+                <span className="text-sm font-bold tabular-nums text-secondary">₩{won.toLocaleString('ko-KR')}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="bg-surface-container-lowest rounded-xl p-6 md:p-8 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <p className="text-xs font-bold text-on-surface-variant tracking-widest uppercase">서포터 영역</p>
             <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">고정 지출 및 알림 통제실</h2>
-            <p className="text-sm text-on-surface-variant mt-1">목표 달성을 방해하는 고정 지출과 알림 타이밍을 관리하세요.</p>
+            <p className="text-sm text-on-surface-variant mt-1">
+              아래 표는 <strong>샘플 UI</strong>이며 아직 원장과 연동되지 않습니다. (추후 스키마 확정)
+            </p>
           </div>
           <button
             onClick={runLandingSimulation}
@@ -108,56 +214,64 @@ export default function BudgetPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-surface-container">
-        <table className="w-full border-collapse">
-          <thead className="bg-surface-container-low/50">
-            <tr>
-              <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">항목명</th>
-              <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">유형</th>
-              <th className="px-5 py-3 text-right text-[10px] uppercase tracking-wider text-outline font-bold">예상 금액</th>
-              <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">알림 설정</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-surface-container hover:bg-surface-container-low/40 transition-colors">
-                <td className="px-5 py-4">
-                  <div className="font-semibold text-on-surface">{row.name}</div>
-                </td>
-                <td className="px-5 py-4">
-                  {row.kind === 'regular' ? (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
-                      정기성(매월)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-tertiary-container/30 text-on-tertiary-container">
-                      일회성
-                    </span>
-                  )}
-                </td>
-                <td className="px-5 py-4 text-right font-bold tabular-nums">₩{row.amount.toLocaleString('ko-KR')}</td>
-                <td className="px-5 py-4">
-                  <div className="flex flex-wrap gap-2">
-                    {alertOptions.map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => setNotify(row.id, opt)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-                          row.notify === opt
-                            ? 'bg-primary/12 text-primary border-primary/25'
-                            : 'bg-white text-on-surface-variant border-surface-container hover:border-primary/20'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-on-surface-variant py-4">등록된 항목이 없습니다. (고정지출·알림 — 추후 연동)</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-surface-container">
+            <table className="w-full border-collapse">
+              <thead className="bg-surface-container-low/50">
+                <tr>
+                  <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">항목명</th>
+                  <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">유형</th>
+                  <th className="px-5 py-3 text-right text-[10px] uppercase tracking-wider text-outline font-bold">예상 금액</th>
+                  <th className="px-5 py-3 text-left text-[10px] uppercase tracking-wider text-outline font-bold">알림 설정</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-t border-surface-container hover:bg-surface-container-low/40 transition-colors"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="font-semibold text-on-surface">{row.name}</div>
+                    </td>
+                    <td className="px-5 py-4">
+                      {row.kind === 'regular' ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
+                          정기성(매월)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-tertiary-container/30 text-on-tertiary-container">
+                          일회성
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-right font-bold tabular-nums">₩{row.amount.toLocaleString('ko-KR')}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        {alertOptions.map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setNotify(row.id, opt)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                              row.notify === opt
+                                ? 'bg-primary/12 text-primary border-primary/25'
+                                : 'bg-white text-on-surface-variant border-surface-container hover:border-primary/20'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   )
