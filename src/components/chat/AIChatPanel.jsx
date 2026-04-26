@@ -339,7 +339,15 @@ export default function AIChatPanel() {
           account: String(args.account ?? '').trim() || undefined,
         })
         if (!out.success) return out
-        return { success: true, ...out, note: '클라이언트에 원장이 반영되었습니다. summary로 사용자에게 보고하라.' }
+        const needAccount = !String(args.account ?? '').trim()
+        return {
+          success: true,
+          ...out,
+          need_account_clarify: needAccount,
+          note: needAccount
+            ? '【필수】원장이 반영됨(계정 미지정). 이 응답 턴의 **끝**에, 현금·카드(또는 이체/통장) 중 **어떤 돈**으로 쓰셨는지 **꼭 한 문장**으로 질문할 것(인사만 하지 말 것).'
+            : '클라이언트에 원장이 반영되었습니다. summary로 사용자에게 보고하라.',
+        }
       }
 
       if (toolName === 'render_visualization') {
