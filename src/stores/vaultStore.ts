@@ -171,6 +171,7 @@ type VaultState = {
     amount: number
     date: string
     memo: string
+    account?: string
   }) => Promise<
     | { success: true; txId: string; summary: { date: string; amount: number; category: string; memo: string; type: 'EXPENSE' | 'INCOME' } }
     | { success: false; error: string }
@@ -373,6 +374,7 @@ function buildVaultTxFromAiLedgerEntry(input: {
   amount: number
   date: string
   memo: string
+  account?: string
 }): VaultTransaction {
   const amountAbs = Math.abs(Number(input.amount))
   if (!Number.isFinite(amountAbs) || amountAbs <= 0) {
@@ -386,16 +388,19 @@ function buildVaultTxFromAiLedgerEntry(input: {
     String(input.category || '').trim(),
   )
   const isTax = /세금|국세청|공과금/.test(`${categoryNorm} ${memo}`)
+  const acct = String(input.account || '').trim()
+  const title = memo.length > 120 ? `${memo.slice(0, 117)}…` : memo
+  // userMemo(메모 열) = 메모·맥락만(제목/적요). "지기 AI"·카테고리 꾸밈 문구는 넣지 않음(카테고리는 열).
 
   return {
     id: String(++_id),
     createdAt: new Date().toISOString(),
     source: 'manual',
     date: normalizeApiDate(input.date),
-    merchant: memo.length > 120 ? `${memo.slice(0, 117)}…` : memo,
-    name: memo.length > 120 ? `${memo.slice(0, 117)}…` : memo,
+    merchant: title,
+    name: title,
     location: '',
-    userMemo: `지기 AI 등록 · ${categoryNorm}`,
+    userMemo: title,
     category: categoryNorm,
     type: txType,
     aiConfidence: 1,
@@ -406,6 +411,7 @@ function buildVaultTxFromAiLedgerEntry(input: {
     iconBg: txType === 'INCOME' ? '#6e9fff' : isTax ? '#ffe8c2' : '#ffd3dc',
     iconColor: txType === 'INCOME' ? '#002150' : isTax ? '#875100' : '#7d2438',
     amount: signed,
+    ...(acct ? { account: acct } : {}),
   }
 }
 
@@ -428,7 +434,7 @@ function buildVaultTxFromWebhookInbox(input: {
     ...base,
     source: 'webhook',
     sourceRef: `webhook:${input.queueKey}`,
-    userMemo: `지기 Webhook · ${base.category}`,
+    userMemo: String(input.title || '').trim() || base.userMemo,
   }
 }
 
@@ -597,7 +603,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   addLine: async (tx) => {
     await putLedgerLine(tx)
-    set((s) => ({ transactions: [tx, ...s.transactions] }))
+    const acc = String(tx.account || '').trim()
+    set((s) => ({
+      transactions: [tx, ...s.transactions],
+      knownAccounts: acc ? Array.from(new Set([acc, ...s.knownAccounts])) : s.knownAccounts,
+    }))
     void flushLocalVaultSnapshotToKv().catch(() => {})
   },
 

@@ -298,11 +298,27 @@ export default function AIChatPanel() {
       }
 
       if (toolName === 'update_ledger') {
-        const { txId, category } = args
+        const { txId, category, account } = args
         const target = transactions.find((t) => t.id === String(txId))
         if (!target) return { success: false, error: `ID ${txId}인 거래를 찾을 수 없습니다.` }
-        await updateTransactionInline(String(txId), { category: String(category) })
-        return { success: true, txId, previousCategory: target.category, newCategory: category }
+        const patch = {}
+        if (category != null && String(category).trim()) {
+          patch.category = String(category).trim()
+        }
+        if (account != null) {
+          patch.account = String(account).trim()
+        }
+        if (Object.keys(patch).length === 0) {
+          return { success: false, error: 'category 또는 account 중 하나는 필요합니다.' }
+        }
+        await updateTransactionInline(String(txId), patch)
+        return {
+          success: true,
+          txId,
+          previousCategory: target.category,
+          newCategory: patch.category ?? target.category,
+          newAccount: patch.account,
+        }
       }
 
       if (toolName === 'add_ledger_entry') {
@@ -313,6 +329,7 @@ export default function AIChatPanel() {
           amount: Number(args.amount),
           date: String(args.date ?? '').trim(),
           memo: String(args.memo ?? '').trim(),
+          account: String(args.account ?? '').trim() || undefined,
         })
         if (!out.success) return out
         return { success: true, ...out, note: '클라이언트에 원장이 반영되었습니다. summary로 사용자에게 보고하라.' }

@@ -82,6 +82,9 @@ ${addLedgerCategoryEnumBlock()}
 - 4요소를 모두 갖췄거나(또는 역질문으로 보충) 기록 의도가 유지되면 **add_ledger_entry** 로 즉시 등록하고, tool summary 기준으로 **"[memo/사용처]에 ₩…을 지출(또는 수입)하신 내역을 가계부에 기록했습니다."** 한 문장으로 보고해라.
 - **금액·날짜·내용 중 하나라도 없으면** add_ledger_entry를 **절대** 호출하지 말고, 부족한 것만 **다정·짧게** 역질문해라.
 - **카테고리는 별도 항목**이지만(아래 4번), [스마트 역질문 룰]에 따라 묻지 않고 Enum으로 매핑해도 되는 경우가 있다.
+- **memo(한 줄):** 가계부·원장에 쓰는 **그 문장**이다. "점심에", "저녁에" 같은 **맥락·시간**을 **절대 생략하지 말 것**(예: "돼지국밥"만 쓰지 말고 유저가 "점심에 돼지국밥"이면 **그대로**). memo·답장에 **"지기"·"AI"·"자동"** 등 시스템 꾸밈말 **금지**.
+- **account(계정/결제수단):** 유저가 **현금/카드/이체/통장**을 말했을 때만 \`add_ledger_entry\` 의 **account**에 넣는다(또는 dbContext "등록된 계정"과 일치시킨다). **말하지 않았으면 파라미터 생략·비움.**
+- add_ledger_entry **성공 이후** **account**를 넣지 못한 거래(계정 미지정)이면, **이번 턴 답변**에서 **반드시** "현금이었나요, 카드(또는 이체)였나요?" 등 **짧게 한 문장**으로 **추가 질문**한다(있다고 둘러대지 말 것).
 - 등록 대기 중에는 **절대** query_ledger / analyze_category_spending / update_ledger / render_visualization 을 "등록 대용"으로 쓰지 마라.
 
 **[필수 4요소 확인]**
@@ -246,20 +249,25 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'update_ledger',
-      description: '특정 거래의 카테고리를 수정합니다.',
+      description:
+        '특정 거래의 카테고리·또는 계정(결제수단)을 수정합니다. **category**와 **account** 중 **하나 이상**을 넣는다.',
       parameters: {
         type: 'object',
         properties: {
           txId: {
             type: 'string',
-            description: '수정할 거래의 ID (query_ledger 결과의 id 필드)',
+            description: '수정할 거래의 ID (query_ledger 결과의 id 필드, 또는 add_ledger_entry 직후 tool이 돌려준 id)',
           },
           category: {
             type: 'string',
-            description: '새로운 카테고리명. 예: 식비',
+            description: '새 카테고리 (Enum, 변경할 때만). 그대로 둘 거면 생략.',
+          },
+          account: {
+            type: 'string',
+            description: '결제/입금 **계정**(현금, OO카드 …). 유저가 말로 확정한 값. 계정만 바꿀 때 사용.',
           },
         },
-        required: ['txId', 'category'],
+        required: ['txId'],
       },
     },
   },
@@ -284,7 +292,15 @@ const TOOLS = [
           },
           amount: { type: 'number', description: '원 단위 양수. 절댓값이 기록됨(지출/수입은 type으로 구분).' },
           date: { type: 'string', description: '거래일 YYYY-MM-DD (오늘/어제 등은 이 날짜로 환산)' },
-          memo: { type: 'string', description: '어디서/무엇에 썼는지·입금 사유(가맹점·용도). 거래 제목·적요로 쓰인다.' },
+          memo: {
+            type: 'string',
+            description:
+              '원장·메모에 그대로 쓸 **한 줄**. 맥락·시간(예: 점심에) 유지. "지기/AI" 등 꾸밈말 넣지 말 것.',
+          },
+          account: {
+            type: 'string',
+            description: '현금/카드/이체/통장 등 **유저가 말한** 결제수단. **모르면 생략(비움).**',
+          },
         },
         required: ['type', 'category', 'amount', 'date', 'memo'],
       },

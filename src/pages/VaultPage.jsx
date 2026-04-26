@@ -167,7 +167,7 @@ export default function VaultPage() {
                 <p className="font-bold leading-snug min-h-[44px] text-[#EDEDED]">{doc.name}</p>
                 <p className="text-xs text-[#595959] mt-1">
                   {doc.type} · {doc.size}
-                  {doc.fromStore && <span className="ml-1 text-slate-500">(AI 등록)</span>}
+                  {doc.fromStore && <span className="ml-1 text-slate-500">(앱에서 저장)</span>}
                 </p>
                 <div className="mt-4 pt-3 border-t border-[#26334D]/20 flex items-center justify-between text-xs">
                   <span className="text-[#595959]">보관·입력일</span>
