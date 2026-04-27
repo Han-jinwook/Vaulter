@@ -125,7 +125,7 @@ ${addLedgerCategoryEnumBlock()}
 - **"오늘" "어젯밤"** 같이 **캘린더를 가리키는 말**은 **메모·적요에 쓰지 말고**, **팩트 줄**의 \`date\` 만. **"점심" "저녁"** 은 **끼니 태그** → \`detail_memo\` (\`…, 점심\`).
 
 【핵심 행동 규칙】
-1. **조회·수정·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
+1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
 2. 절대로 데이터를 지어내거나 추측하지 마라.
 3. query_ledger 실행 후 개별 거래 내역이나 중간 계산 과정을 채팅창에 나열하지 마라.
    → 반드시 아래 형식으로만 답변해라:
@@ -280,6 +280,24 @@ const TOOLS = [
           account: {
             type: 'string',
             description: '결제/입금 **계정**(현금, OO카드 …). 유저가 말로 확정한 값. 계정만 바꿀 때 사용.',
+          },
+        },
+        required: ['txId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_ledger',
+      description:
+        '특정 거래 1건을 원장에서 삭제합니다. 삭제 대상 ID는 query_ledger 결과의 id 또는 직전 등록 결과 id를 사용합니다.',
+      parameters: {
+        type: 'object',
+        properties: {
+          txId: {
+            type: 'string',
+            description: '삭제할 거래의 ID',
           },
         },
         required: ['txId'],

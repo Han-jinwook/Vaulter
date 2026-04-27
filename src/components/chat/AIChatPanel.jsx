@@ -109,6 +109,7 @@ export default function AIChatPanel() {
     resolveLedgerReview,
     addChatMessage,
     updateTransactionInline,
+    deleteLine,
     addLedgerEntry,
   } = useVaultStore()
   const isChartMode = useUIStore((s) => s.isChartMode)
@@ -333,6 +334,25 @@ export default function AIChatPanel() {
         }
       }
 
+      if (toolName === 'delete_ledger') {
+        const txId = String(args.txId || '').trim()
+        if (!txId) return { success: false, error: 'txId가 필요합니다.' }
+        const target = transactions.find((t) => t.id === txId)
+        if (!target) return { success: false, error: `ID ${txId}인 거래를 찾을 수 없습니다.` }
+        await deleteLine(txId)
+        return {
+          success: true,
+          txId,
+          deleted: {
+            date: normalizeDate(target.date),
+            name: target.name || target.merchant || '(이름 없음)',
+            amount: target.amount,
+            category: target.category || '미분류',
+            account: target.account || '',
+          },
+        }
+      }
+
       if (toolName === 'add_ledger_entry') {
         const type = args.type === 'INCOME' ? 'INCOME' : 'EXPENSE'
         const out = await addLedgerEntry({
@@ -380,7 +400,7 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter],
+    [transactions, updateTransactionInline, deleteLine, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter],
   )
 
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
@@ -434,6 +454,7 @@ export default function AIChatPanel() {
 
               if (toolName === 'query_ledger') setThinkingLabel('금고를 뒤져보는 중...')
               else if (toolName === 'update_ledger') setThinkingLabel('원장을 수정하는 중...')
+              else if (toolName === 'delete_ledger') setThinkingLabel('원장에서 삭제하는 중...')
               else if (toolName === 'add_ledger_entry') setThinkingLabel('가계부에 기록하는 중...')
               else if (toolName === 'render_visualization') setThinkingLabel('시각화를 여는 중...')
 
