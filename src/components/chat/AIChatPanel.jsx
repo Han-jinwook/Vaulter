@@ -97,7 +97,6 @@ function runQueryLedger(transactions, args) {
 export default function AIChatPanel() {
   const {
     messages,
-    hoveredTxId,
     transactions,
     knownAccounts,
     confirmTransaction,
@@ -150,8 +149,6 @@ export default function AIChatPanel() {
   const sliceStart = Math.max(0, totalMsgCount - displayCount)
   const visibleMessages = messages.slice(sliceStart)
   const hasOlderMessages = sliceStart > 0
-
-  const hoveredTx = hoveredTxId ? transactions.find((t) => t.id === hoveredTxId) : null
 
   // 채팅 하단 스크롤
   const scrollChatToBottom = useCallback((smooth = true) => {
@@ -585,22 +582,6 @@ export default function AIChatPanel() {
           </div>
         )}
       </div>
-
-      {/* Hover Context Chip */}
-      {hoveredTx && (
-        <div className="px-4 py-2 animate-fade-in">
-          <div className="bg-primary/5 border border-primary/15 rounded-xl px-4 py-2.5 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-base">visibility</span>
-            <span className="text-xs">
-              <span className="text-primary font-bold">{hoveredTx.name}</span>
-              <span className="text-on-surface-variant ml-1">내역 선택됨</span>
-            </span>
-            <span className="ml-auto text-xs font-bold tabular-nums text-on-surface-variant">
-              {hoveredTx.amount > 0 ? '+' : ''}₩{Math.abs(hoveredTx.amount).toLocaleString()}
-            </span>
-          </div>
-        </div>
-      )}
 
       <IsolatedChatComposer
         variant="keeper"
