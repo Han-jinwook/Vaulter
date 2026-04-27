@@ -772,6 +772,9 @@ function ChatBubble({
     const effectiveCategory = categoryLocked
       ? String(categoryOptions[0]?.category || '').trim()
       : selectedCategory.trim()
+    const isPresetAccountSelected = liveAccountOptions.some(
+      (opt) => String(opt.category || '').trim() === accountInput.trim(),
+    )
     const canSubmit = Boolean(effectiveCategory && accountInput.trim() && msg.txId)
     return (
       <div className="flex flex-col gap-1 max-w-[94%]">
@@ -854,7 +857,14 @@ function ChatBubble({
                 {liveAccountOptions.map((opt) => (
                   <button
                     key={opt.label}
-                    onClick={() => setAccountInput(opt.category)}
+                    onClick={() => {
+                      const chosenAccount = String(opt.category || '').trim()
+                      if (!chosenAccount) return
+                      setAccountInput(chosenAccount)
+                      if (msg.txId && effectiveCategory) {
+                        onCompleteReview(String(msg.txId), effectiveCategory, chosenAccount)
+                      }
+                    }}
                     className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
                       accountInput === opt.category
                         ? 'bg-primary text-white border-primary'
@@ -878,13 +888,15 @@ function ChatBubble({
                 placeholder="계정명 직접입력 (예: 통장1, 현대카드)"
                 className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
-              <button
-                onClick={() => onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())}
-                disabled={!canSubmit}
-                className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
-              >
-                확인
-              </button>
+              {!isPresetAccountSelected && (
+                <button
+                  onClick={() => onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())}
+                  disabled={!canSubmit}
+                  className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
+                >
+                  확인
+                </button>
+              )}
             </div>
           </>
         ) : (
