@@ -32,9 +32,28 @@ function formatNeedAccountFactLine(summary) {
 
 // 로컬 원장 쿼리 (client-side tool 실행)
 function runQueryLedger(transactions, args) {
-  const { startDate, endDate, category, excludeCategories, account, merchant, type, sortBy = 'date_desc', minAmount, maxAmount, limit = 20 } = args
+  const {
+    startDate,
+    endDate,
+    category,
+    excludeCategories,
+    account,
+    merchant,
+    location,
+    type,
+    sortBy = 'date_desc',
+    minAmount,
+    maxAmount,
+    limit = 20,
+  } = args
   let results = [...transactions]
 
+  if (location) {
+    const q = String(location).toLowerCase().trim()
+    if (q) {
+      results = results.filter((tx) => String(tx.location || '').toLowerCase().includes(q))
+    }
+  }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
   if (endDate)   results = results.filter((tx) => normalizeDate(tx.date) <= endDate)
   if (type === 'expense') results = results.filter((tx) => tx.amount < 0)

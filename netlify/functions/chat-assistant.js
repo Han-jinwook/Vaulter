@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { interRoomSystemSuffix } from './interRoomSystemSuffix.js'
+import { interRoomSystemSuffixForKeeper } from './interRoomSystemSuffix.js'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -125,7 +125,7 @@ ${addLedgerCategoryEnumBlock()}
 - **"오늘" "어젯밤"** 같이 **캘린더를 가리키는 말**은 **메모·적요에 쓰지 말고**, **팩트 줄**의 \`date\` 만. **"점심" "저녁"** 은 **끼니 태그** → \`detail_memo\` (\`…, 점심\`).
 
 【핵심 행동 규칙】
-1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
+1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. **삭제**(지워줘/삭제해/N건/가계부 샘플 등): \`query_ledger\` 로 대상을 찾을 때 **시트·가져오기 출처**가 있으면 **location** 파라미터(예: \`가계부\`, \`샘플\`, 시트 파일명 일부)를 쓴다 → 나온 **id** 마다 \`delete_ledger\` 호출. **"지기 방으로 이동" 링크는 쓰지 말 것**(삭제는 지기 본인 업무). 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1의 삭제/조회 부분을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
 2. 절대로 데이터를 지어내거나 추측하지 마라.
 3. query_ledger 실행 후 개별 거래 내역이나 중간 계산 과정을 채팅창에 나열하지 마라.
    → 반드시 아래 형식으로만 답변해라:
@@ -141,7 +141,7 @@ ${addLedgerCategoryEnumBlock()}
 7. 말투는 **짧고 직관**. 상단 **【채팅 답변 — 짧고 직관】** 우선. 한국어로만 답변해라.
 8. 금액은 반드시 ₩ 기호와 천 단위 구분 쉼표를 사용해라.
 9. 유저가 "자금 흐름도", "흐름도", "차트", "시각화", "Sankey" 등을 요청하면 반드시 render_visualization을 호출해라.
-${interRoomSystemSuffix()}`
+${interRoomSystemSuffixForKeeper()}`
 }
 
 // ─── Tool 스키마 ─────────────────────────────────────────────────────────────
@@ -151,10 +151,15 @@ const TOOLS = [
     function: {
       name: 'query_ledger',
       description:
-        '원장(가계부)에서 거래 내역을 검색합니다. 기간·카테고리·가맹점으로 필터링할 수 있습니다.',
+        '원장(가계부)에서 거래 내역을 검색합니다. 기간·카테고리·가맹·**가져온 출처(위치/시트명)** 등으로 필터링할 수 있다. 삭제 전 대상을 찾을 때 사용한다.',
       parameters: {
         type: 'object',
         properties: {
+          location: {
+            type: 'string',
+            description:
+              '가져오기/연동 **출처 라벨** 부분일치(예: 구글 시트 "가계부_샘플", "샘플"). `ingest` 로 넣은 거래의 `location` 필드와 매칭한다.',
+          },
           startDate: {
             type: 'string',
             description: '조회 시작 날짜 (YYYY-MM-DD). 예: 2026-04-01',
@@ -291,7 +296,7 @@ const TOOLS = [
     function: {
       name: 'delete_ledger',
       description:
-        '특정 거래 1건을 원장에서 삭제합니다. 삭제 대상 ID는 query_ledger 결과의 id 또는 직전 등록 결과 id를 사용합니다.',
+        '특정 거래 1건을 원장에서 삭제합니다. **여러 건**이면 query_ledger로 id 목록을 얻은 뒤 **이 도구를 id마다 반복 호출**한다. 삭제 대상 id는 query_ledger 결과의 id 또는 add 직후 tool이 돌려준 id.',
       parameters: {
         type: 'object',
         properties: {

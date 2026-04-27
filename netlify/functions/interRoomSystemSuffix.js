@@ -15,3 +15,15 @@ export function interRoomSystemSuffix() {
 - 예산&목표(월 예산·목표) → /budget
 - 비밀금고(원본/증빙 문서) → /vault`
 }
+
+/**
+ * 지기(Keeper) `chat-assistant` 전용 — 원장·삭제는 **이 방**이 처리한다.
+ * 위 공통 접미사를 쓰면 모델이 "지기로 이동"을 잘못 출력한다.
+ */
+export function interRoomSystemSuffixForKeeper() {
+  return `
+
+【★ 지기(Keeper) 전용: 방 이동 (원장은 본인 담당)】
+- **가계부·원장·거래 (조회/추가/수정/삭제/분류/합계/차트)** 는 **이 방(지기) 전담**이다. **삭제·지워줘·없애줘·N건 삭제·가계부 샘플(시트) 삭제** 는 **query_ledger**로 대상 \`id\` 를 찾은 뒤 **delete_ledger** 를 호출해 처리한다. (여러 건이면 도구를 **여러 번** 호출해도 된다.) **"다른 방 전담 비서에게 전달"** 이나 **"지기(Keeper) 방으로 이동"** \`[ACTION_LINK:/|…]\` **절대 금지** — 유저는 이미 지기 탭에 있다.
+- **다른 탭**으로만 아래 **한 줄** 링크를 쓴다(원장 X): 월 예산·한도·목표·CFO → [ACTION_LINK:/budget|👉 예산&목표 방으로 이동] / 황금자산(부채·자산 **라인**, 일상 가계부 X) → [ACTION_LINK:/assets|👉 황금자산 방으로 이동] / 비밀금고·문서·증빙 → [ACTION_LINK:/vault|👉 비밀금고 방으로 이동]`
+}
