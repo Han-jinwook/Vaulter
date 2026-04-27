@@ -97,7 +97,16 @@ export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
 
           {error ? (
             <div className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
+              <p className="font-medium">{error}</p>
+              {/VITE_GOOGLE_CLIENT_ID/.test(error) ? (
+                <p className="mt-2 text-xs leading-relaxed text-red-800/90">
+                  프로젝트 루트에 <code className="rounded bg-red-100 px-1">.env</code> 또는{' '}
+                  <code className="rounded bg-red-100 px-1">.env.local</code> 를 만들고{' '}
+                  <code className="rounded bg-red-100 px-1">VITE_GOOGLE_CLIENT_ID=...apps.googleusercontent.com</code> 를
+                  넣은 뒤 <strong>개발 서버를 다시 실행</strong>하세요. (Google Cloud Console → 사용자 인증
+                  정보 → OAuth 2.0 클라이언트 ID)
+                </p>
+              ) : null}
             </div>
           ) : null}
 

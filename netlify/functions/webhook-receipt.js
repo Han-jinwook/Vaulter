@@ -32,6 +32,72 @@ ${addLedgerCategoryEnumBlock()}
 - 수입(급여·환급·이자·입금)이면 type=INCOME, 지출이면 type=EXPENSE.`
 }
 
+const EXPENSE_CATEGORY_ENUM = [
+  '식비',
+  '교통/차량',
+  '쇼핑/뷰티',
+  '주거/통신',
+  '문화/여가',
+  '건강/병원',
+  '이자/금융수수료',
+  '카드대금 결제',
+  '대출 상환',
+  '기타 지출',
+]
+
+const INCOME_CATEGORY_ENUM = ['급여', '부수입', '금융 수입', '기타 수입']
+
+function inferExpenseCategoryFromTitle(title) {
+  const t = String(title || '').toLowerCase()
+  if (!t) return ''
+  if (
+    /(식당|분식|국밥|밀면|냉면|칼국수|김밥|치킨|피자|버거|카페|커피|베이커리|빵집|도시락|족발|보쌈|해장국|떡볶이|편의점|맥도날드|버거킹|롯데리아|스타벅스|투썸|본죽|본도시락)/i.test(
+      t
+    )
+  ) {
+    return '식비'
+  }
+  if (/(택시|버스|지하철|주차|톨게이트|기름|주유|충전소|카카오택시|대리운전)/i.test(t)) {
+    return '교통/차량'
+  }
+  if (/(쿠팡|11번가|지마켓|올리브영|무신사|화장품|쇼핑|옷|의류|신발)/i.test(t)) {
+    return '쇼핑/뷰티'
+  }
+  if (/(월세|관리비|통신|요금|전기|가스|수도|인터넷|휴대폰)/i.test(t)) {
+    return '주거/통신'
+  }
+  if (/(영화|넷플릭스|유튜브|티빙|게임|공연|여가|도서|책)/i.test(t)) {
+    return '문화/여가'
+  }
+  if (/(병원|약국|치과|한의원|의원|진료|검사|약값)/i.test(t)) {
+    return '건강/병원'
+  }
+  if (/(수수료|이자|연체|리볼빙)/i.test(t)) {
+    return '이자/금융수수료'
+  }
+  if (/(카드대금|카드값|청구대금)/i.test(t)) {
+    return '카드대금 결제'
+  }
+  if (/(대출 상환|원리금|대출금)/i.test(t)) {
+    return '대출 상환'
+  }
+  return ''
+}
+
+function normalizeParsedCategory(type, rawCategory, title) {
+  const category = String(rawCategory || '').trim()
+  if (type === 'INCOME') {
+    if (INCOME_CATEGORY_ENUM.includes(category)) return category
+    const t = `${category} ${title}`.toLowerCase()
+    if (/(급여|월급|연봉)/i.test(t)) return '급여'
+    if (/(이자|배당|예금)/i.test(t)) return '금융 수입'
+    if (/(환급|리워드|중고판매|용돈|수익|수입)/i.test(t)) return '부수입'
+    return '기타 수입'
+  }
+  if (EXPENSE_CATEGORY_ENUM.includes(category)) return category
+  return inferExpenseCategoryFromTitle(title) || '기타 지출'
+}
+
 function safeParseRequestBody(event) {
   if (!event?.body) return { text: '' }
   const raw = event.isBase64Encoded
@@ -108,6 +174,7 @@ export const handler = async (event) => {
     return json(422, { ok: false, error: 'INVALID_AMOUNT' })
   }
   const title = String(parsed.title || '웹훅 영수증').trim() || '웹훅 영수증'
+  const category = normalizeParsedCategory(type, parsed.category, title)
   const idPart = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`
   const key = `q/${userId}/${idPart}.json`
   const record = {
@@ -116,7 +183,7 @@ export const handler = async (event) => {
     key,
     parsed: {
       type,
-      category: String(parsed.category || '').trim(),
+      category,
       amount,
       date: String(parsed.date || todayIsoDate()).trim(),
       title: title.length > 200 ? title.slice(0, 200) : title,

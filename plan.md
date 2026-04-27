@@ -5,7 +5,7 @@
 
 > **문서 지위:** 기획·코드 변경 시 **이 문서(§0~4)를 1차 기준**으로 삼는다.  
 > **과거 기획(긴본):** `docs/plan-archive.md` (2026-04-15 캡처)  
-> **합의 반영:** 2026-04-21 (재미니) · 2026-04-22 (스프린트/아카이브) · 2026-04-26 (CFO `budgetContext`/착시 타파 연동) · **코드 대조:** 아래 [구현 대조](#구현-대조-코드-베이스-스냅샷)
+> **합의 반영:** 2026-04-21 (재미니) · 2026-04-22 (스프린트/아카이브) · 2026-04-26 (CFO `budgetContext`/착시 타파 연동) · 2026-04-28 (지기: `fact_line`/상대일·끼니 `detail_memo`) · **코드 대조:** 아래 [구현 대조](#구현-대조-코드-베이스-스냅샷)
 
 ---
 
@@ -86,11 +86,22 @@
 | 구역 | 명세 핵심 | 구현 | 비고 |
 |------|-----------|------|------|
 | **§0** | IDB+Zustand, 웹훅 2단 | ✅ `vaultStore`, Netlify `webhook-*`, `registerAndSyncWebhookInbox` | 로컬 순수 Vite는 Blobs 503 — `netlify dev`/배포에서 전체 동작 |
-| **§1** | 파싱, 웹훅, 팩트·수수료 | ✅ `chat-assistant.js`, `webhook-receipt`, 프롬프트, Enum(이자/상환) | `ledger_lines` + `ingestWebhookInboxItems` |
+| **§1** | 파싱, 웹훅, 팩트·수수료 | ✅ `chat-assistant.js`, `webhook-receipt`, 프롬프트, Enum(이자/상환) | `ledger_lines` + `ingestWebhookInboxItems` · **§1 지기 채팅 · 원장 팔로우업** 참고(모델 `gpt-4o-mini`, `fact_line` 등) |
 | **§2** | 부채 2종, UI, 청산 AI | ✅ `goldenAssetCategories`, `chat-assistant-assets.js`, `AssetsPage` | 구 라벨은 `normalize` |
 | **§3** | 실시간 예산·`isConsumptive` | **진행** | ✅ `BudgetPage`: `useAssetStats` 소비+`useThisMonthConsumptiveByCategory`+`budgetSettings(월한도, localStorage)` / 초과 시 경고. ▢ 카테고리별 **한도**·목표 DB는 다음 |
 | **§3** | CFO AI [착시 타파] + 실시간 `budgetContext` | **✅** | `netlify/functions/chat-assistant-budget.js`(스냅샷·착시·폴백) · `src/lib/budgetContextForApi.ts` · `src/components/chat/BudgetChatPanel.jsx`(요청마다 payload) · `selectThisMonthConsumptiveExpenseTotal` |
 | **§4** | Gmail·벌크·비전 | **부분** | 코드 경로 있음, E2E는 별도 점검 |
+
+---
+
+## §1 지기 채팅 · 원장 팔로우업
+
+(상단 **합의 반영** 2026-04-28 전후, 코드·프롬프트에 반영된 §1 보완)
+
+- **모델:** 지기(금고) 채팅 `/.netlify/functions/chat-assistant` — **`gpt-4o-mini`** (OpenAI Chat Completions).
+- **계정 미지정:** `add_ledger_entry` 후 `need_account_clarify` — 클라 `AIChatPanel`이 **`fact_line`**(YYYY-MM-DD, 적요, 메모, ₩, 카테고리)을 내려주고, 답은 **팩트 한 줄 → 결제(현금/카드) 질문** 위주(수치 없는 추상 "확인" 멘트 금지).
+- **날짜:** "삼일 전"·"N일 전" 등 **상대·구어**는 **요청 기준 "오늘"**에서 YYYY-MM-DD로 **직접 환산** — 같은 뜻으로 **캘린더를 다시 묻지 않음**.
+- **메모 `detail_memo`:** "점심으로/저녁에" 등은 **끼니(식사 맥락)** — 예: **`보리밥, 점심`**, **`돼지갈비, 저녁`** (쉼표). 캘린더 말(오늘/어제)은 메모에 넣지 않음(날짜 열과 중복).
 
 ---
 
