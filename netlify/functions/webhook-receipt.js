@@ -1,7 +1,6 @@
 import crypto from 'node:crypto'
 import {
   CORS,
-  addLedgerCategoryEnumBlock,
   initBlobsContext,
   getBlobStore,
   json,
@@ -19,17 +18,39 @@ function todayIsoDate() {
   return `${y}-${m}-${d}`
 }
 
-function buildWebhookParsePrompt() {
-  const d = todayIsoDate()
-  return `너는 가계부 영수증 한 줄을 구조화하는 변환기다. 입력은 결제/입금에 대한 임의의 한국어·숫자 텍스트다.
-${addLedgerCategoryEnumBlock()}
+function nowIsoDateTimeMinute() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d} ${hh}:${mm}`
+}
 
-규칙:
-- **출력은 JSON 오브젝트 하나뿐** (설명·Markdown·코드펜스 금지)
-- **필드:** type(문자열 "EXPENSE" 또는 "INCOME"), category(위 Enum), amount(양의 숫자, KRW), date(YYYY-MM-DD), title(짧은 한글 메모, 가맹점·용도)
-- "오늘"이면 date="${d}" 로 두어라. 날짜를 도저히 알 수 없을 때만 "${d}".
-- 금액이 여러 개면 **가장 합리적인 총액(결제·출금) 1개**를 택해라.
-- 수입(급여·환급·이자·입금)이면 type=INCOME, 지출이면 type=EXPENSE.`
+function buildWebhookParsePrompt() {
+  const nowHint = nowIsoDateTimeMinute()
+  return `너는 금융 데이터 추출 전문가다.
+유저가 보낸 결제/입금 알림 텍스트의 문맥을 분석하여, 반드시 아래 JSON 스키마 구조로만 답변해라.
+절대 다른 부연 설명을 덧붙이지 마라.
+
+출력 규칙:
+- 출력은 오직 JSON object 하나
+- Markdown/code fence/주석/설명 금지
+- 금액은 숫자형(콤마/통화기호 제거)
+- type은 반드시 "INCOME" 또는 "EXPENSE"
+- category가 애매하면 "미분류"
+- 날짜를 추론할 수 없으면 현재 시각 힌트(${nowHint}) 기준의 YYYY-MM-DD HH:mm 사용
+
+JSON 스키마:
+{
+  "date": "YYYY-MM-DD HH:mm",
+  "amount": 0,
+  "vendor": "결제처 또는 상호명",
+  "type": "INCOME 또는 EXPENSE",
+  "category": "애매하면 미분류",
+  "memo": "특이사항, 할부 정보, 참고 메모"
+}`
 }
 
 const EXPENSE_CATEGORY_ENUM = [
@@ -47,55 +68,70 @@ const EXPENSE_CATEGORY_ENUM = [
 
 const INCOME_CATEGORY_ENUM = ['급여', '부수입', '금융 수입', '기타 수입']
 
-function inferExpenseCategoryFromTitle(title) {
-  const t = String(title || '').toLowerCase()
-  if (!t) return ''
-  if (
-    /(식당|분식|국밥|밀면|냉면|칼국수|김밥|치킨|피자|버거|카페|커피|베이커리|빵집|도시락|족발|보쌈|해장국|떡볶이|편의점|맥도날드|버거킹|롯데리아|스타벅스|투썸|본죽|본도시락)/i.test(
-      t
-    )
-  ) {
-    return '식비'
-  }
-  if (/(택시|버스|지하철|주차|톨게이트|기름|주유|충전소|카카오택시|대리운전)/i.test(t)) {
-    return '교통/차량'
-  }
-  if (/(쿠팡|11번가|지마켓|올리브영|무신사|화장품|쇼핑|옷|의류|신발)/i.test(t)) {
-    return '쇼핑/뷰티'
-  }
-  if (/(월세|관리비|통신|요금|전기|가스|수도|인터넷|휴대폰)/i.test(t)) {
-    return '주거/통신'
-  }
-  if (/(영화|넷플릭스|유튜브|티빙|게임|공연|여가|도서|책)/i.test(t)) {
-    return '문화/여가'
-  }
-  if (/(병원|약국|치과|한의원|의원|진료|검사|약값)/i.test(t)) {
-    return '건강/병원'
-  }
-  if (/(수수료|이자|연체|리볼빙)/i.test(t)) {
-    return '이자/금융수수료'
-  }
-  if (/(카드대금|카드값|청구대금)/i.test(t)) {
-    return '카드대금 결제'
-  }
-  if (/(대출 상환|원리금|대출금)/i.test(t)) {
-    return '대출 상환'
-  }
-  return ''
-}
-
-function normalizeParsedCategory(type, rawCategory, title) {
+function normalizeParsedCategory(type, rawCategory) {
   const category = String(rawCategory || '').trim()
   if (type === 'INCOME') {
     if (INCOME_CATEGORY_ENUM.includes(category)) return category
-    const t = `${category} ${title}`.toLowerCase()
-    if (/(급여|월급|연봉)/i.test(t)) return '급여'
-    if (/(이자|배당|예금)/i.test(t)) return '금융 수입'
-    if (/(환급|리워드|중고판매|용돈|수익|수입)/i.test(t)) return '부수입'
     return '기타 수입'
   }
   if (EXPENSE_CATEGORY_ENUM.includes(category)) return category
-  return inferExpenseCategoryFromTitle(title) || '기타 지출'
+  return '기타 지출'
+}
+
+function buildSafeFallback(rawText) {
+  return {
+    date: nowIsoDateTimeMinute(),
+    amount: 0,
+    vendor: '파싱실패',
+    type: 'EXPENSE',
+    category: '미분류',
+    memo: `JSON_PARSE_FAILED | ${String(rawText || '').slice(0, 500)}`,
+  }
+}
+
+function parseModelJsonOrFallback(modelContent, rawText) {
+  const text = String(modelContent || '').trim()
+  try {
+    if (!text) throw new Error('EMPTY_CONTENT')
+    const parsed = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object') throw new Error('NOT_OBJECT')
+    return parsed
+  } catch {
+    return buildSafeFallback(rawText)
+  }
+}
+
+function normalizeModelOutput(parsed, rawText) {
+  const typeText = String(parsed?.type || '').trim().toUpperCase()
+  const type = typeText === 'INCOME' ? 'INCOME' : 'EXPENSE'
+  const amountNum = Math.abs(Number(parsed?.amount))
+  const amount = Number.isFinite(amountNum) ? amountNum : 0
+  const vendor =
+    String(parsed?.vendor || parsed?.title || '').trim() ||
+    '웹훅 알림'
+  const memo = String(parsed?.memo || '').trim() || String(rawText || '').slice(0, 500)
+
+  let date = String(parsed?.date || '').trim()
+  if (!date) date = nowIsoDateTimeMinute()
+  if (date.length === 10 && date.includes('-')) {
+    const hm = nowIsoDateTimeMinute().slice(11, 16)
+    date = `${date} ${hm}`
+  }
+
+  const categoryInput = String(parsed?.category || '').trim()
+  const category =
+    categoryInput === '미분류'
+      ? (type === 'INCOME' ? '기타 수입' : '기타 지출')
+      : normalizeParsedCategory(type, categoryInput)
+
+  return {
+    type,
+    amount,
+    date,
+    vendor,
+    category,
+    memo,
+  }
 }
 
 function safeParseRequestBody(event) {
@@ -164,17 +200,8 @@ export const handler = async (event) => {
   }
   const data = await res.json()
   const content = data?.choices?.[0]?.message?.content
-  const parsed = safeParseJSON(String(content || ''))
-  if (!parsed || typeof parsed !== 'object') {
-    return json(422, { ok: false, error: 'PARSE_FAILED' })
-  }
-  const type = String(parsed.type || '').toUpperCase() === 'INCOME' ? 'INCOME' : 'EXPENSE'
-  const amount = Math.abs(Number(parsed.amount))
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return json(422, { ok: false, error: 'INVALID_AMOUNT' })
-  }
-  const title = String(parsed.title || '웹훅 영수증').trim() || '웹훅 영수증'
-  const category = normalizeParsedCategory(type, parsed.category, title)
+  const parsed = parseModelJsonOrFallback(content, text)
+  const normalized = normalizeModelOutput(parsed, text)
   const idPart = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`
   const key = `q/${userId}/${idPart}.json`
   const record = {
@@ -182,11 +209,12 @@ export const handler = async (event) => {
     createdAt: new Date().toISOString(),
     key,
     parsed: {
-      type,
-      category,
-      amount,
-      date: String(parsed.date || todayIsoDate()).trim(),
-      title: title.length > 200 ? title.slice(0, 200) : title,
+      type: normalized.type,
+      category: normalized.category,
+      amount: normalized.amount,
+      date: String(normalized.date || todayIsoDate()).trim(),
+      title: normalized.vendor.length > 200 ? normalized.vendor.slice(0, 200) : normalized.vendor,
+      memo: normalized.memo,
     },
     rawText: String(text).slice(0, 12000),
   }
