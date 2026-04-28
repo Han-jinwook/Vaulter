@@ -20,9 +20,53 @@ function normalizeDate(d) {
 
 function normalizeSearchText(value) {
   return String(value || '')
+    .normalize('NFKC')
     .toLowerCase()
-    .replace(/[\s_\-]+/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
     .trim()
+}
+
+function editDistanceWithin(a, b, limit = 1) {
+  const s = String(a || '')
+  const t = String(b || '')
+  const n = s.length
+  const m = t.length
+  if (Math.abs(n - m) > limit) return false
+  if (s === t) return true
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
+  for (let i = 0; i <= n; i += 1) dp[i][0] = i
+  for (let j = 0; j <= m; j += 1) dp[0][j] = j
+  for (let i = 1; i <= n; i += 1) {
+    let rowMin = limit + 1
+    for (let j = 1; j <= m; j += 1) {
+      const cost = s[i - 1] === t[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+      if (dp[i][j] < rowMin) rowMin = dp[i][j]
+    }
+    if (rowMin > limit) return false
+  }
+  return dp[n][m] <= limit
+}
+
+function fuzzyTextMatch(fieldValue, queryValue) {
+  const raw = String(fieldValue || '').toLowerCase().trim()
+  const qRaw = String(queryValue || '').toLowerCase().trim()
+  if (!qRaw) return true
+  if (!raw) return false
+  if (raw.includes(qRaw)) return true
+
+  const norm = normalizeSearchText(fieldValue)
+  const qNorm = normalizeSearchText(queryValue)
+  if (!qNorm) return true
+  if (!norm) return false
+  if (norm.includes(qNorm) || qNorm.includes(norm)) return true
+
+  // 짧은 오타(예: 가계부샘플 -> 가계브샘플) 흡수: 길이 충분할 때만 1글자 허용
+  if (qNorm.length >= 4 && norm.length >= 4) {
+    const short = Math.min(qNorm.length, norm.length)
+    if (short <= 24 && editDistanceWithin(norm, qNorm, 1)) return true
+  }
+  return false
 }
 
 /** 계정 질문 전 팩트 한 줄 — `need_account_clarify` 턴에 모델이 그대로 인용 */
@@ -56,15 +100,7 @@ function runQueryLedger(transactions, args) {
   let results = [...transactions]
 
   if (location) {
-    const q = String(location).toLowerCase().trim()
-    const qNorm = normalizeSearchText(location)
-    if (q) {
-      results = results.filter((tx) => {
-        const locRaw = String(tx.location || '').toLowerCase()
-        const locNorm = normalizeSearchText(tx.location)
-        return locRaw.includes(q) || (qNorm && locNorm.includes(qNorm))
-      })
-    }
+    results = results.filter((tx) => fuzzyTextMatch(tx.location, location))
   }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
   if (endDate)   results = results.filter((tx) => normalizeDate(tx.date) <= endDate)
@@ -75,17 +111,14 @@ function runQueryLedger(transactions, args) {
     results = results.filter((tx) => !excl.some((e) => tx.category?.toLowerCase().includes(e)))
   }
   if (category) {
-    const q = category.toLowerCase()
-    results = results.filter((tx) => tx.category?.toLowerCase().includes(q))
+    results = results.filter((tx) => fuzzyTextMatch(tx.category, category))
   }
   if (account) {
-    const q = account.toLowerCase()
-    results = results.filter((tx) => tx.account?.toLowerCase().includes(q))
+    results = results.filter((tx) => fuzzyTextMatch(tx.account, account))
   }
   if (merchant) {
-    const q = merchant.toLowerCase()
     results = results.filter(
-      (tx) => tx.name?.toLowerCase().includes(q) || tx.merchant?.toLowerCase().includes(q),
+      (tx) => fuzzyTextMatch(tx.name, merchant) || fuzzyTextMatch(tx.merchant, merchant),
     )
   }
   if (minAmount != null) results = results.filter((tx) => Math.abs(tx.amount) >= minAmount)
