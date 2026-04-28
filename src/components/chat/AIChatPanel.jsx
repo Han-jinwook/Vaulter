@@ -70,6 +70,21 @@ function fuzzyTextMatch(fieldValue, queryValue) {
 }
 
 function fuzzySourceMatch(fieldValue, queryValue) {
+  const canonicalMap = {
+    manual: ['manual', '입력', '직접입력', '수기'],
+    upload: ['upload', '문서', '가져온', '가져오기', '파일', '시트', '샘플'],
+    gmail: ['gmail', '지메일', '메일'],
+    webhook: ['webhook', '연동', '자동', '단축어', '훅'],
+  }
+  const fieldNorm = normalizeSearchText(fieldValue)
+  const queryNorm = normalizeSearchText(queryValue)
+  for (const aliases of Object.values(canonicalMap)) {
+    const aliasNorm = aliases.map((v) => normalizeSearchText(v))
+    const fieldHit = aliasNorm.some((a) => fieldNorm.includes(a) || a.includes(fieldNorm))
+    const queryHit = aliasNorm.some((a) => queryNorm.includes(a) || a.includes(queryNorm))
+    if (fieldHit && queryHit) return true
+  }
+
   if (fuzzyTextMatch(fieldValue, queryValue)) return true
   const rawQuery = String(queryValue || '')
     .normalize('NFKC')
@@ -101,6 +116,72 @@ function merchantKeywordMatch(tx, keyword) {
     fuzzyTextMatch(tx?.merchant, keyword) ||
     fuzzyTextMatch(tx?.userMemo, keyword)
   )
+}
+
+function formatQueryFilterSummary(args) {
+  const parts = [
+    args.startDate && args.endDate ? `기간 ${args.startDate}~${args.endDate}` : null,
+    args.location ? `소스 ${args.location}` : null,
+    args.category ? `카테고리 ${args.category}` : null,
+    args.merchant ? `상호 ${args.merchant}` : null,
+    args.account ? `계정 ${args.account}` : null,
+    args.type ? `유형 ${args.type}` : null,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : '필터 없음'
+}
+
+function buildQueryRetryPlan(rawArgs) {
+  const base = { ...(rawArgs || {}) }
+  const plan = [{ label: '기본 조건', args: base }]
+
+  const categoryKeyword = String(base.category || '').trim()
+  const hasMerchant = String(base.merchant || '').trim().length > 0
+  if (categoryKeyword && !hasMerchant) {
+    const retryArgs = {
+      ...base,
+      merchant: categoryKeyword,
+    }
+    delete retryArgs.category
+    plan.push({
+      label: '카테고리 필터 해제 + 상호명 전환',
+      args: retryArgs,
+      loadingLabel: `카테고리 필터를 풀고 '${categoryKeyword}' 상호명으로 다시 찾는 중...`,
+    })
+  }
+
+  const lastArgs = plan[plan.length - 1].args
+  const relaxedArgs = { ...lastArgs }
+  let relaxed = false
+  if (relaxedArgs.startDate || relaxedArgs.endDate) {
+    delete relaxedArgs.startDate
+    delete relaxedArgs.endDate
+    relaxed = true
+  }
+  if (relaxedArgs.location) {
+    delete relaxedArgs.location
+    relaxed = true
+  }
+  if (!relaxed && relaxedArgs.category) {
+    delete relaxedArgs.category
+    relaxed = true
+  }
+  if (relaxed) {
+    plan.push({
+      label: '기간/소스 완화 재검색',
+      args: relaxedArgs,
+      loadingLabel: '기간/소스 필터를 완화해서 다시 찾는 중...',
+    })
+  }
+
+  const deduped = []
+  const seen = new Set()
+  for (const item of plan) {
+    const key = JSON.stringify(item.args)
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(item)
+  }
+  return deduped
 }
 
 /** 계정 질문 전 팩트 한 줄 — `need_account_clarify` 턴에 모델이 그대로 인용 */
@@ -141,7 +222,9 @@ function runQueryLedger(transactions, args) {
     hasCategoryHint && !hasMerchantHint && !categoryIsKnown
 
   if (location) {
-    results = results.filter((tx) => fuzzySourceMatch(tx.location, location))
+    results = results.filter(
+      (tx) => fuzzySourceMatch(tx.location, location) || fuzzySourceMatch(tx.source, location),
+    )
   }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
   if (endDate)   results = results.filter((tx) => normalizeDate(tx.date) <= endDate)
@@ -341,25 +424,50 @@ export default function AIChatPanel() {
   const executeTool = useCallback(
     async (toolName, args) => {
       if (toolName === 'query_ledger') {
-        const result = runQueryLedger(transactions, args)
+        const retryPlan = buildQueryRetryPlan(args)
+        let chosenResult = null
+        let chosenStep = null
+        const attempts = []
+
+        for (let idx = 0; idx < retryPlan.length; idx += 1) {
+          const step = retryPlan[idx]
+          if (idx > 0 && step.loadingLabel) setThinkingLabel(step.loadingLabel)
+          const result = runQueryLedger(transactions, step.args)
+          attempts.push({
+            label: step.label,
+            filters: formatQueryFilterSummary(step.args),
+            count: result.count,
+          })
+          if (result.count > 0 || idx === retryPlan.length - 1) {
+            chosenResult = result
+            chosenStep = step
+            break
+          }
+        }
+
+        const result = chosenResult || runQueryLedger(transactions, args)
         const sum = Math.abs(result.transactions.reduce((s, t) => s + t.amount, 0))
 
         // 결과가 있으면 원장 UI를 즉시 필터링
         if (result.count > 0) {
           const ids = new Set(result.transactions.map((t) => t.id))
           const parts = [
-            args.startDate && args.endDate ? `${args.startDate} ~ ${args.endDate}` : null,
-            args.location ? `소스:${args.location}` : null,
-            args.category || null,
-            args.merchant || null,
+            chosenStep?.args.startDate && chosenStep?.args.endDate
+              ? `${chosenStep.args.startDate} ~ ${chosenStep.args.endDate}`
+              : null,
+            chosenStep?.args.location ? `소스:${chosenStep.args.location}` : null,
+            chosenStep?.args.category || null,
+            chosenStep?.args.merchant || null,
           ].filter(Boolean)
           setAiFilter({ label: parts.join(' · ') || 'AI 검색 결과', ids })
         }
 
         return {
           ...result,
+          attempt_count: attempts.length,
+          attempts,
           summary: result.count === 0
-            ? `해당 조건의 내역이 없습니다. (DB에는 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리 목록: ${result._db.categories.join(', ')})`
+            ? `조회 결과 0건입니다. 시도한 조건: ${attempts.map((a) => `${a.label}(${a.filters})`).join(' → ')}. (DB 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리: ${result._db.categories.join(', ')})`
             : `총 ${result.count}건, 합계 ₩${sum.toLocaleString()}`,
         }
       }

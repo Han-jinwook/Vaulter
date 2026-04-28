@@ -320,8 +320,11 @@ function buildIntentOverrideSystemMessage(intent, userText) {
       role: 'system',
       content: `【라우팅 오버라이드: 삭제 요청】이번 사용자 발화는 삭제 의도다.
 - 반드시 도구를 먼저 사용한다: query_ledger -> delete_ledger(필요 횟수만큼 반복)
+- 삭제는 바로 실행하지 말고, query_ledger 결과를 요약해 먼저 확인받아라.
+- 확인 문구 형식: "OO 소스에서 총 N건(₩합계)을 찾았습니다. 모두 삭제할까요?"
 - "다른 방 전달" 또는 이동 링크 출력 금지
 - "입력한/가져온/샘플/시트" 같은 출처 힌트가 있으면 query_ledger의 location(소스 라벨) 필터를 우선 활용
+- 고유명사(헬스장/스타벅스/쿠팡 등)는 category보다 merchant 파라미터를 우선 사용
 - 사용자 발화: ${text}`,
     }
   }
@@ -330,6 +333,8 @@ function buildIntentOverrideSystemMessage(intent, userText) {
       role: 'system',
       content: `【라우팅 오버라이드: 조회 요청】이번 사용자 발화는 조회 의도다.
 - 반드시 query_ledger(또는 분석이면 analyze_category_spending)를 먼저 호출
+- 고유명사 검색어는 category보다 merchant에 우선 배치
+- 결과가 0건이면 "없다" 단정 전에 필터를 완화해 최대 2회 재시도한 뒤 답해라.
 - 사용자 발화: ${text}`,
     }
   }
@@ -442,7 +447,7 @@ ${addLedgerCategoryEnumBlock()}
 - **"오늘" "어젯밤"** 같이 **캘린더를 가리키는 말**은 **메모·적요에 쓰지 말고**, **팩트 줄**의 \`date\` 만. **"점심" "저녁"** 은 **끼니 태그** → \`detail_memo\` (\`…, 점심\`).
 
 【핵심 행동 규칙】
-1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. **삭제**(지워줘/삭제해/N건/가계부 샘플 등): \`query_ledger\` 로 대상을 찾을 때 **시트·가져오기 출처**가 있으면 **location(=소스 라벨)** 파라미터(예: \`가계부\`, \`샘플\`, 시트 파일명 일부)를 쓴다 → 나온 **id** 마다 \`delete_ledger\` 호출. **"지기 방으로 이동" 링크는 쓰지 말 것**(삭제는 지기 본인 업무). 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1의 삭제/조회 부분을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
+1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. **삭제**(지워줘/삭제해/N건/가계부 샘플 등): \`query_ledger\` 로 대상을 찾을 때 **시트·가져오기 출처**가 있으면 **location(=소스 라벨)** 파라미터(예: \`가계부\`, \`샘플\`, 시트 파일명 일부)를 쓴다. 대상을 찾으면 **바로 삭제하지 말고** 먼저 "OO 소스에서 총 N건(₩합계)을 찾았습니다. 모두 삭제할까요?" 형태로 확인받아라. 확인받은 뒤에만 나온 **id** 마다 \`delete_ledger\` 호출. **"지기 방으로 이동" 링크는 쓰지 말 것**(삭제는 지기 본인 업무). 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1의 삭제/조회 부분을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
 2. 절대로 데이터를 지어내거나 추측하지 마라.
 3. query_ledger 실행 후 개별 거래 내역이나 중간 계산 과정을 채팅창에 나열하지 마라.
    → 반드시 아래 형식으로만 답변해라:
@@ -451,7 +456,7 @@ ${addLedgerCategoryEnumBlock()}
    → 연산 결과는 클라이언트가 이미 계산해서 넘겨주므로, GPT는 절대 직접 수학 계산을 하지 마라.
    → tool 결과의 topCategory, topAmount를 그대로 읽어 단 한 줄로 브리핑해라.
    예) "가장 지출이 큰 카테고리는 식비로, 총 ₩69,000입니다. 상세 내역은 왼쪽 원장에 표시해두었습니다."
-5. 결과가 0건이면 tool 결과의 _db.categories 목록을 참고해 비슷한 카테고리를 제안해라.
+5. 결과가 0건이면 tool 결과의 _db.categories 목록을 참고해 비슷한 카테고리를 제안하되, **반드시** "어떤 필터(기간/카테고리/상호/소스)로 찾았는지"를 먼저 한 줄로 공개해라.
 6. analyze_category_spending 결과를 받아 topCategory가 있으면, 답변 끝에 반드시 다음 태그를 붙여라 (렌더링 안 됨):
    [WINNER_CATEGORY:카테고리명]
    예) "가장 많이 쓴 카테고리는 식비입니다. [WINNER_CATEGORY:식비]"
@@ -487,7 +492,7 @@ const TOOLS = [
           },
           category: {
             type: 'string',
-            description: '카테고리 필터 (부분일치). 예: 식비, 교통',
+            description: '카테고리 필터 (부분일치). Enum/기존 카테고리가 명확할 때만 사용. "헬스장/스타벅스/쿠팡" 같은 고유명사는 merchant에 우선 넣어라.',
           },
           excludeCategories: {
             type: 'array',
@@ -500,7 +505,7 @@ const TOOLS = [
           },
           merchant: {
             type: 'string',
-            description: '가맹점 이름 검색어 (부분일치). 예: 스타벅스',
+            description: '가맹점/상호/고유명사 검색어 (부분일치). 예: 헬스장, 스타벅스, 쿠팡. category보다 우선.',
           },
           minAmount: {
             type: 'number',
@@ -677,28 +682,67 @@ const MAX_HISTORY_MESSAGES = 20
 
 function sanitizeToolCallHistory(messages) {
   const out = []
+  let pendingCallIds = null
+  let pendingAssistantIndex = -1
+
+  const dropPendingBlock = () => {
+    if (pendingAssistantIndex >= 0) out.splice(pendingAssistantIndex)
+    pendingCallIds = null
+    pendingAssistantIndex = -1
+  }
+
   for (const msg of messages) {
     if (!msg || typeof msg !== 'object') continue
-    if (msg.role !== 'tool') {
+    const isAssistantToolCall =
+      msg.role === 'assistant' &&
+      Array.isArray(msg.tool_calls) &&
+      msg.tool_calls.length > 0
+
+    if (isAssistantToolCall) {
+      if (pendingCallIds && pendingCallIds.size > 0) {
+        // 이전 tool_call 블록이 완결되지 않았으면 블록 전체 제거
+        dropPendingBlock()
+      }
+      const ids = msg.tool_calls
+        .map((c) => c?.id)
+        .filter((id) => typeof id === 'string' && id.trim())
+      if (ids.length === 0) continue
+      pendingAssistantIndex = out.length
       out.push(msg)
+      pendingCallIds = new Set(ids)
       continue
     }
-    const prev = out[out.length - 1]
-    const validPrev =
-      prev &&
-      prev.role === 'assistant' &&
-      Array.isArray(prev.tool_calls) &&
-      prev.tool_calls.length > 0
-    if (validPrev) out.push(msg)
+
+    if (msg.role === 'tool') {
+      if (!pendingCallIds || pendingCallIds.size === 0) continue
+      const callId = String(msg.tool_call_id || '').trim()
+      if (!callId || !pendingCallIds.has(callId)) continue
+      out.push(msg)
+      pendingCallIds.delete(callId)
+      if (pendingCallIds.size === 0) {
+        pendingCallIds = null
+        pendingAssistantIndex = -1
+      }
+      continue
+    }
+
+    // 일반 메시지로 넘어가기 전에 미완결 tool_call 블록 제거
+    if (pendingCallIds && pendingCallIds.size > 0) dropPendingBlock()
+    out.push(msg)
   }
+
+  // 끝까지 tool 결과가 안 온 병렬 호출 블록은 assistant(tool_calls)째 제거
+  if (pendingCallIds && pendingCallIds.size > 0) dropPendingBlock()
   return out
 }
 
 function trimHistory(messages) {
+  const sanitized = sanitizeToolCallHistory(messages)
   const sliced =
-    messages.length <= MAX_HISTORY_MESSAGES
-      ? messages
-      : messages.slice(-MAX_HISTORY_MESSAGES)
+    sanitized.length <= MAX_HISTORY_MESSAGES
+      ? sanitized
+      : sanitized.slice(-MAX_HISTORY_MESSAGES)
+  // 슬라이싱 경계에서 쌍이 깨지는 경우를 다시 정리
   return sanitizeToolCallHistory(sliced)
 }
 
@@ -748,6 +792,7 @@ export const handler = async (event) => {
 query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색/필터에 활용해도 좋다.
 유저가 "현금"이라고 하면 계정 목록에서 일치하는 항목을 찾아 account 파라미터로 전달해라.
 유저가 기존 원장 키워드로 "식비" 등을 말하면 category 필터는 위 목록과 맞출 수 있다.
+유저 발화의 고유명사(헬스장/스타벅스/쿠팡/가게명)는 category로 억지 매핑하지 말고 merchant 파라미터를 우선 사용해라.
 
 **add_ledger_entry (신규 등록):** **summary=가맹·장소**, **detail_memo=메뉴·품목** (+끼니면 \`…, 점심\`). **\`date\`**: 오늘/어제/**삼일·N일 전** 등 **상대일은 "오늘" 기준으로 직접 YYYY-MM-DD** — **이걸로 되묻지 말 것**. 캘린더 \`"오늘" "어제"\` **문구**는 메모·적요 **금지**. \`need_account_clarify: true\` 이면 **첫째 줄** \`fact_line\` **우선**, **둘째 줄** 결제수단. 금액/날짜(해석 불가)/summary 없으면 **도구 금지**.
 **add_ledger_entry의 category 파라미터** — 아래 **고정 Enum만** (옛 원장 키워드는 참고용):
