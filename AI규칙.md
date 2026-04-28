@@ -32,23 +32,33 @@
 - **필수 4**: 분류(카테고리), 적요(summary), 계정(account), 금액
 - **선택 1**: 메모(detail_memo / memo)
 - 메모는 있으면 기록, 없다고 추가 질문 강요하지 않음.
+- 서버(`chat-assistant.js`)는 user 입력 턴마다 Structured Output 게이트를 먼저 돈다:
+  - `is_financial_data=false`면 일반 대화/조회 흐름으로 보낸다.
+  - `is_financial_data=true`인데 필수4 누락이면 `is_complete=false` + `missing_fields`로 되묻는다.
+  - 필수4가 갖춰졌을 때만 `is_complete=true`로 등록 단계(`add_ledger_entry`)로 진입한다.
 
 ### 1-3. add_ledger_entry 규칙
 
-- 호출 조건: 금액/날짜/적요가 확보됐을 때만 호출.
+- 호출 조건: Structured 게이트 결과 `is_complete=true`일 때만 호출.
 - 날짜는 상대 표현(오늘/어제/삼일 전/N일 전 등)을 요청 시점 기준으로 YYYY-MM-DD 환산.
 - 카테고리는 고정 Enum만 허용:
   - 지출: 식비, 교통/차량, 쇼핑/뷰티, 주거/통신, 문화/여가, 건강/병원, 이자/금융수수료, 카드대금 결제, 대출 상환, 기타 지출
   - 수입: 급여, 부수입, 금융 수입, 기타 수입
 - `summary`는 가맹/장소 우선, `detail_memo`는 메뉴/품목/끼니 태그(`품목, 점심`) 우선.
+- Structured 게이트 응답 스키마 기준:
+  - `is_financial_data`, `is_complete`, `missing_fields`, `extracted_data`, `cfo_message`
+  - `extracted_data.category`는 Enum 값만 허용(아니면 누락으로 처리)
+  - JSON 파싱 실패/형식 불량은 안전 fallback 후 되묻기 우선(무리한 자동등록 금지)
 
 ### 1-4. 계정 확인 UX 규칙
 
+- Structured 게이트에서 `missing_fields`에 `account`가 있으면 DB 반영 없이 즉시 질문한다.
 - `need_account_clarify`이면:
   - 첫 줄: `fact_line`(YYYY-MM-DD, 적요, 메모(있으면), ₩금액, 카테고리)
   - 둘째 줄: 계정 확인 질문
 - 추상형 문구(“확인되었습니다”) 금지.
 - 수입 질문에서 “결제수단” 표현 남용 금지(입금/수취 계정 중심 질문).
+- 모호 계정(예: `은행이체`, `계좌이체`)은 구체 계정명이 확인될 때까지 `PENDING`/질문 대상으로 본다.
 
 ### 1-5. 조회/삭제/분석 도구 규칙
 
