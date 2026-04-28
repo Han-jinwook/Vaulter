@@ -242,45 +242,75 @@ function buildAddLedgerToolCallFromStructured(structured) {
   }
 }
 
-function looksLikeNewEntryIntent(text) {
-  const t = String(text || '').toLowerCase().trim()
-  if (!t) return false
-  const deny = [
-    '삭제',
-    '지워',
-    '없애',
-    '취소',
-    '되돌',
-    '찾아',
-    '조회',
-    '검색',
-    '보여',
-    '목록',
-    '합계',
-    '분석',
-    '차트',
-    '시각화',
-    '수정',
-    '바꿔',
-    '변경',
-  ]
-  if (deny.some((k) => t.includes(k))) return false
-  const allow = [
-    '기록',
-    '입력',
-    '원장에',
-    '가계부에',
-    '써줘',
-    '썼어',
-    '결제했',
-    '사용했',
-    '샀',
-    '입금',
-    '받았',
-    '지출',
-    '수입',
-  ]
-  return allow.some((k) => t.includes(k))
+function buildIntentRouterSystemPrompt() {
+  return `너는 지기방 요청 라우터다. 유저의 마지막 문장을 보고 intent를 분류한다.
+출력은 JSON object 하나만.
+
+intent enum:
+- create_entry: 새 거래 기록/입력/등록 의도
+- delete: 삭제 의도
+- query: 조회/검색/목록/합계 확인
+- update: 기존 거래 수정/변경
+- analyze: 통계/분석/순위
+- visualize: 차트/시각화
+- chat: 일반 대화/기타
+
+rules:
+- 모호하면 chat
+- 거래 "기록" 의미가 강하면 create_entry
+- 절대 설명 문장 금지
+
+JSON:
+{
+  "intent": "create_entry|delete|query|update|analyze|visualize|chat",
+  "confidence": 0.0,
+  "reason": "짧은 내부 근거"
+}`
+}
+
+function normalizeIntentName(rawIntent) {
+  const t = String(rawIntent || '').trim().toLowerCase()
+  if (
+    t === 'create_entry' ||
+    t === 'delete' ||
+    t === 'query' ||
+    t === 'update' ||
+    t === 'analyze' ||
+    t === 'visualize' ||
+    t === 'chat'
+  ) {
+    return t
+  }
+  return 'chat'
+}
+
+async function runIntentRouter(apiKey, userText) {
+  const body = {
+    model: 'gpt-4o-mini',
+    response_format: { type: 'json_object' },
+    temperature: 0,
+    messages: [
+      { role: 'system', content: buildIntentRouterSystemPrompt() },
+      { role: 'user', content: String(userText || '').slice(0, 2000) },
+    ],
+  }
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) return { intent: 'chat', confidence: 0 }
+  const payload = await res.json()
+  const content = payload?.choices?.[0]?.message?.content
+  const parsed = parseJsonObjectStrict(content)
+  if (!parsed || typeof parsed !== 'object') return { intent: 'chat', confidence: 0 }
+  return {
+    intent: normalizeIntentName(parsed.intent),
+    confidence: Number(parsed.confidence) || 0,
+  }
 }
 
 function loadApiKey() {
@@ -660,32 +690,35 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
     : null
 
   try {
-    // 1) 지기방 전용: 신규 거래 입력은 Structured Output으로 1차 게이트
-    if (tailMessage?.role === 'user' && latestUserText && looksLikeNewEntryIntent(latestUserText)) {
-      const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext)
-      if (structured?.is_financial_data === true) {
-        if (structured.is_complete !== true) {
+    // 1) 지기방 전용: LLM intent-router → create_entry만 Structured 게이트
+    if (tailMessage?.role === 'user' && latestUserText) {
+      const route = await runIntentRouter(apiKey, latestUserText)
+      if (route.intent === 'create_entry') {
+        const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext)
+        if (structured?.is_financial_data === true) {
+          if (structured.is_complete !== true) {
+            return json(200, {
+              type: 'reply',
+              text:
+                String(structured.cfo_message || '').trim() ||
+                '거래 기록을 위해 누락된 정보를 알려 주세요.',
+            })
+          }
+          const call = buildAddLedgerToolCallFromStructured(structured)
           return json(200, {
-            type: 'reply',
-            text:
-              String(structured.cfo_message || '').trim() ||
-              '거래 기록을 위해 누락된 정보를 알려 주세요.',
+            type: 'tool_call',
+            assistantMessage: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [call],
+            },
+            calls: [call],
           })
         }
-        const call = buildAddLedgerToolCallFromStructured(structured)
-        return json(200, {
-          type: 'tool_call',
-          assistantMessage: {
-            role: 'assistant',
-            content: null,
-            tool_calls: [call],
-          },
-          calls: [call],
-        })
       }
     }
 
-    // 2) 그 외 일반 대화/조회/수정/삭제/분석은 기존 tool-agent 루프
+    // 2) 일반 대화/조회/수정/삭제/분석/시각화는 기존 tool-agent 루프
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
