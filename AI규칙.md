@@ -32,7 +32,11 @@
 - **필수 4**: 분류(카테고리), 적요(summary), 계정(account), 금액
 - **선택 1**: 메모(detail_memo / memo)
 - 메모는 있으면 기록, 없다고 추가 질문 강요하지 않음.
-- 서버(`chat-assistant.js`)는 user 입력 턴마다 Structured Output 게이트를 먼저 돈다:
+- 서버(`chat-assistant.js`)는 user 입력 턴마다 **LLM intent-router(JSON)** 를 먼저 실행한다:
+  - intent enum: `create_entry | delete | query | update | analyze | visualize | chat`
+  - `create_entry`일 때만 Structured Output 게이트로 진입
+  - router 실패/파싱 실패 시 안전하게 `chat`으로 복귀(기존 루프 유지)
+- Structured Output 게이트(`create_entry` 전용):
   - `is_financial_data=false`면 일반 대화/조회 흐름으로 보낸다.
   - `is_financial_data=true`인데 필수4 누락이면 `is_complete=false` + `missing_fields`로 되묻는다.
   - 필수4가 갖춰졌을 때만 `is_complete=true`로 등록 단계(`add_ledger_entry`)로 진입한다.
@@ -62,6 +66,7 @@
 
 ### 1-5. 조회/삭제/분석 도구 규칙
 
+- `delete/query/update/analyze/visualize` intent는 Structured 등록 게이트를 거치지 않고 기존 tool-agent 루프에서 처리한다.
 - `query_ledger`: 기간/분류/계정/가맹 + `location`(가져오기 출처) 필터 지원.
 - `delete_ledger`: 1건 삭제 도구. 다건 삭제는 `query_ledger`로 id 목록 확보 후 반복 호출.
 - `analyze_category_spending`: 카테고리 합산/순위 질문 전담(직접 계산 금지).
