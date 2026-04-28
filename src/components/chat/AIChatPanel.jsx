@@ -18,6 +18,13 @@ function normalizeDate(d) {
   return d
 }
 
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, '')
+    .trim()
+}
+
 /** 계정 질문 전 팩트 한 줄 — `need_account_clarify` 턴에 모델이 그대로 인용 */
 function formatNeedAccountFactLine(summary) {
   if (!summary) return ''
@@ -50,8 +57,13 @@ function runQueryLedger(transactions, args) {
 
   if (location) {
     const q = String(location).toLowerCase().trim()
+    const qNorm = normalizeSearchText(location)
     if (q) {
-      results = results.filter((tx) => String(tx.location || '').toLowerCase().includes(q))
+      results = results.filter((tx) => {
+        const locRaw = String(tx.location || '').toLowerCase()
+        const locNorm = normalizeSearchText(tx.location)
+        return locRaw.includes(q) || (qNorm && locNorm.includes(qNorm))
+      })
     }
   }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)

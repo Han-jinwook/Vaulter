@@ -70,6 +70,7 @@
 - `delete/query/update/analyze/visualize` intent는 Structured 등록 게이트를 거치지 않고 기존 tool-agent 루프에서 처리한다.
 - 특히 `delete` intent는 `query_ledger -> delete_ledger(반복)` 순서를 우선 강제하고, 출처 힌트(샘플/시트/가져오기)는 `location` 필터 활용을 우선한다.
 - `query_ledger`: 기간/분류/계정/가맹 + `location`(가져오기 출처) 필터 지원.
+  - `location` 매칭은 소문자 + 공백/`_`/`-` 제거 정규화 비교를 함께 사용해 `가계부_샘플` vs `가계부 샘플` 같은 표기 차이를 허용한다.
 - `delete_ledger`: 1건 삭제 도구. 다건 삭제는 `query_ledger`로 id 목록 확보 후 반복 호출.
 - `analyze_category_spending`: 카테고리 합산/순위 질문 전담(직접 계산 금지).
 - `render_visualization`: 시각화 요청 시 필수 호출.
