@@ -54,6 +54,11 @@ export default function TransactionTable() {
     return transactions
   }, [transactions, activeLedgerFilter, reviewPinnedTxIds, aiFilter])
 
+  const aiMatchCount = useMemo(() => {
+    if (!aiFilter?.ids) return 0
+    return transactions.reduce((count, tx) => (aiFilter.ids.has(tx.id) ? count + 1 : count), 0)
+  }, [transactions, aiFilter])
+
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
       const dateDiff = dateToTs(b.date) - dateToTs(a.date)
@@ -114,16 +119,21 @@ export default function TransactionTable() {
         {/* AI 필터 배너 */}
         {aiFilter && (
           <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 bg-primary/[0.07] border border-primary/20 rounded-xl animate-fade-in">
-            <div className="flex items-center gap-2 text-sm text-primary font-medium min-w-0">
-              <span className="material-symbols-outlined text-base shrink-0">smart_toy</span>
-              <span className="truncate">AI가 찾아준 내역: {aiFilter.label}</span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 text-sm text-primary font-medium min-w-0">
+                <span className="material-symbols-outlined text-base shrink-0">smart_toy</span>
+                <span className="truncate">AI 검색 결과: {aiFilter.label}</span>
+                <span className="text-[11px] font-bold shrink-0">({aiMatchCount}건)</span>
+              </div>
+              <p className="text-[11px] text-on-surface-variant truncate mt-0.5">
+                현재는 검색 결과만 표시 중입니다. 전체 내역은 `전체 보기`로 복귀할 수 있어요.
+              </p>
             </div>
             <button
               onClick={clearAiFilter}
-              className="shrink-0 flex items-center gap-1 text-[11px] text-outline hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container transition-colors"
+              className="shrink-0 flex items-center gap-1 text-[11px] text-primary font-semibold px-2.5 py-1.5 rounded-lg bg-primary/[0.08] hover:bg-primary/[0.16] transition-colors"
             >
-              <span className="material-symbols-outlined text-sm">close</span>
-              필터 초기화
+              전체 보기
             </button>
           </div>
         )}
@@ -131,7 +141,7 @@ export default function TransactionTable() {
         <div className="flex flex-wrap justify-between items-center gap-2">
           <div>
             <h3 key={ledgerContextTitle} className="font-bold text-base animate-fade-in">
-              {aiFilter ? `🤖 ${aiFilter.label} 검색 결과` : ledgerContextTitle}
+              {ledgerContextTitle}
             </h3>
             <p className="mt-1 text-[11px] text-on-surface-variant">
               내부 스크롤 대신 페이지를 그대로 내려 전체 원장을 이어서 볼 수 있어요.
