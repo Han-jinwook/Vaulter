@@ -69,6 +69,40 @@ function fuzzyTextMatch(fieldValue, queryValue) {
   return false
 }
 
+function fuzzySourceMatch(fieldValue, queryValue) {
+  if (fuzzyTextMatch(fieldValue, queryValue)) return true
+  const rawQuery = String(queryValue || '')
+    .normalize('NFKC')
+    .toLowerCase()
+  const ignore = new Set(['삭제', '삭제해', '삭제하자', '거래', '내역', '입력', '입력한', '가져온', '건'])
+  const tokens = rawQuery
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !ignore.has(t))
+  return tokens.some((token) => fuzzyTextMatch(fieldValue, token))
+}
+
+function normalizeCategorySearchText(value) {
+  return normalizeSearchText(String(value || '').replace(/비\b/g, ''))
+}
+
+function fuzzyCategoryMatch(fieldValue, queryValue) {
+  if (fuzzyTextMatch(fieldValue, queryValue)) return true
+  const fieldNorm = normalizeCategorySearchText(fieldValue)
+  const queryNorm = normalizeCategorySearchText(queryValue)
+  if (!queryNorm) return true
+  if (!fieldNorm) return false
+  return fieldNorm.includes(queryNorm) || queryNorm.includes(fieldNorm)
+}
+
+function merchantKeywordMatch(tx, keyword) {
+  return (
+    fuzzyTextMatch(tx?.name, keyword) ||
+    fuzzyTextMatch(tx?.merchant, keyword) ||
+    fuzzyTextMatch(tx?.userMemo, keyword)
+  )
+}
+
 /** 계정 질문 전 팩트 한 줄 — `need_account_clarify` 턴에 모델이 그대로 인용 */
 function formatNeedAccountFactLine(summary) {
   if (!summary) return ''
@@ -90,7 +124,7 @@ function runQueryLedger(transactions, args) {
     excludeCategories,
     account,
     merchant,
-    location,
+    location, // query_ledger 호환 파라미터명(의미: 소스/출처 라벨)
     type,
     sortBy = 'date_desc',
     minAmount,
@@ -99,8 +133,15 @@ function runQueryLedger(transactions, args) {
   } = args
   let results = [...transactions]
 
+  const hasCategoryHint = String(category || '').trim().length > 0
+  const hasMerchantHint = String(merchant || '').trim().length > 0
+  const categoryIsKnown =
+    hasCategoryHint && transactions.some((tx) => fuzzyCategoryMatch(tx.category, category))
+  const shouldTreatCategoryAsMerchantKeyword =
+    hasCategoryHint && !hasMerchantHint && !categoryIsKnown
+
   if (location) {
-    results = results.filter((tx) => fuzzyTextMatch(tx.location, location))
+    results = results.filter((tx) => fuzzySourceMatch(tx.location, location))
   }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
   if (endDate)   results = results.filter((tx) => normalizeDate(tx.date) <= endDate)
@@ -110,8 +151,8 @@ function runQueryLedger(transactions, args) {
     const excl = excludeCategories.map((c) => c.toLowerCase())
     results = results.filter((tx) => !excl.some((e) => tx.category?.toLowerCase().includes(e)))
   }
-  if (category) {
-    results = results.filter((tx) => fuzzyTextMatch(tx.category, category))
+  if (category && !shouldTreatCategoryAsMerchantKeyword) {
+    results = results.filter((tx) => fuzzyCategoryMatch(tx.category, category))
   }
   if (account) {
     results = results.filter((tx) => fuzzyTextMatch(tx.account, account))
@@ -120,6 +161,10 @@ function runQueryLedger(transactions, args) {
     results = results.filter(
       (tx) => fuzzyTextMatch(tx.name, merchant) || fuzzyTextMatch(tx.merchant, merchant),
     )
+  }
+  if (shouldTreatCategoryAsMerchantKeyword) {
+    // 모델이 "헬스장" 같은 상호 키워드를 category로 넣는 경우를 흡수한다.
+    results = results.filter((tx) => merchantKeywordMatch(tx, category))
   }
   if (minAmount != null) results = results.filter((tx) => Math.abs(tx.amount) >= minAmount)
   if (maxAmount != null) results = results.filter((tx) => Math.abs(tx.amount) <= maxAmount)
@@ -304,6 +349,7 @@ export default function AIChatPanel() {
           const ids = new Set(result.transactions.map((t) => t.id))
           const parts = [
             args.startDate && args.endDate ? `${args.startDate} ~ ${args.endDate}` : null,
+            args.location ? `소스:${args.location}` : null,
             args.category || null,
             args.merchant || null,
           ].filter(Boolean)

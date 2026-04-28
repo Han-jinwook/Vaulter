@@ -73,8 +73,10 @@
   - 텍스트 매칭은 **범용 정규화**(NFKC, 소문자, 문장부호 제거) + 포함 비교를 사용한다.
   - `location`/`category`/`account`/`merchant` 전부 동일한 fuzzy 매칭 유틸을 써서 공백·`_`·`-`·`:`·기호 차이를 흡수한다.
   - 짧은 오타는 1글자 편집거리 허용(길이 제한)으로 보정한다.
+  - 원장 제목 하단 보조 라인은 거래장소가 아니라 **소스 표기**로 통일한다: `manual=입력`, `upload=문서`, `gmail=Gmail`, `webhook=연동` (+ 필요 시 파일명/참조 라벨).
   - UI는 검색 결과 제목을 중복 노출하지 않고, 상단 배너 1회 + `전체 보기` 버튼으로 필터 해제를 명확히 안내한다.
 - `delete_ledger`: 1건 삭제 도구. 다건 삭제는 `query_ledger`로 id 목록 확보 후 반복 호출.
+- 대화 히스토리 트리밍 시 `assistant(tool_calls)`와 `tool` 메시지 짝을 보존해야 하며, 고아 `tool` 메시지는 API 전송 전에 제거한다.
 - `analyze_category_spending`: 카테고리 합산/순위 질문 전담(직접 계산 금지).
 - `render_visualization`: 시각화 요청 시 필수 호출.
 

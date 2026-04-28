@@ -22,6 +22,29 @@ function dateToTs(rawDate) {
   return new Date(y, m - 1, d).getTime()
 }
 
+function buildSourceLabel(tx) {
+  const source = String(tx?.source || '').trim()
+  const rawDetail = String(tx?.location || '').trim()
+  const detailLower = rawDetail.toLowerCase()
+
+  if (source === 'manual') return '소스: 입력'
+
+  if (source === 'upload') {
+    return rawDetail ? `소스: 문서 · ${rawDetail}` : '소스: 문서'
+  }
+
+  if (source === 'gmail') {
+    if (!rawDetail || detailLower.includes('gmail')) return '소스: Gmail'
+    return `소스: Gmail · ${rawDetail}`
+  }
+
+  if (source === 'webhook') {
+    return rawDetail ? `소스: 연동 · ${rawDetail}` : '소스: 연동'
+  }
+
+  return rawDetail ? `소스: ${rawDetail}` : '소스: 기타'
+}
+
 export default function TransactionTable() {
   const {
     transactions,
@@ -214,23 +237,7 @@ export default function TransactionTable() {
                             {tx.name}
                           </p>
                         )}
-                        {isEditing(tx.id, 'location') ? (
-                          <InlineInput
-                            value={draftValue}
-                            setValue={setDraftValue}
-                            onCommit={commitEdit}
-                            onCancel={cancelEdit}
-                          />
-                        ) : (
-                          tx.location && (
-                            <p
-                              onDoubleClick={() => beginEdit(tx.id, 'location', tx.location)}
-                              className="text-[10px] text-gray-500 mt-0.5 cursor-text"
-                            >
-                              {tx.location}
-                            </p>
-                          )
-                        )}
+                        <p className="text-[10px] text-gray-500 mt-0.5">{buildSourceLabel(tx)}</p>
                       </div>
 
                       <div className="flex-1 min-w-[120px] px-1.5">

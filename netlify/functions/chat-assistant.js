@@ -321,7 +321,7 @@ function buildIntentOverrideSystemMessage(intent, userText) {
       content: `【라우팅 오버라이드: 삭제 요청】이번 사용자 발화는 삭제 의도다.
 - 반드시 도구를 먼저 사용한다: query_ledger -> delete_ledger(필요 횟수만큼 반복)
 - "다른 방 전달" 또는 이동 링크 출력 금지
-- "입력한/가져온/샘플/시트" 같은 출처 힌트가 있으면 query_ledger에서 location 필터를 우선 활용
+- "입력한/가져온/샘플/시트" 같은 출처 힌트가 있으면 query_ledger의 location(소스 라벨) 필터를 우선 활용
 - 사용자 발화: ${text}`,
     }
   }
@@ -442,7 +442,7 @@ ${addLedgerCategoryEnumBlock()}
 - **"오늘" "어젯밤"** 같이 **캘린더를 가리키는 말**은 **메모·적요에 쓰지 말고**, **팩트 줄**의 \`date\` 만. **"점심" "저녁"** 은 **끼니 태그** → \`detail_memo\` (\`…, 점심\`).
 
 【핵심 행동 규칙】
-1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. **삭제**(지워줘/삭제해/N건/가계부 샘플 등): \`query_ledger\` 로 대상을 찾을 때 **시트·가져오기 출처**가 있으면 **location** 파라미터(예: \`가계부\`, \`샘플\`, 시트 파일명 일부)를 쓴다 → 나온 **id** 마다 \`delete_ledger\` 호출. **"지기 방으로 이동" 링크는 쓰지 말 것**(삭제는 지기 본인 업무). 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1의 삭제/조회 부분을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
+1. **조회·수정·삭제·분석·시각화** 요청(위 등록 케이스가 아닐 때)에는 반드시 도구(function)를 먼저 호출하고, 실제 데이터를 확인한 뒤 답변해라. **삭제**(지워줘/삭제해/N건/가계부 샘플 등): \`query_ledger\` 로 대상을 찾을 때 **시트·가져오기 출처**가 있으면 **location(=소스 라벨)** 파라미터(예: \`가계부\`, \`샘플\`, 시트 파일명 일부)를 쓴다 → 나온 **id** 마다 \`delete_ledger\` 호출. **"지기 방으로 이동" 링크는 쓰지 말 것**(삭제는 지기 본인 업무). 등록 의도인데 **[필수 4요소]가** 미비하면(스마트 추론으로도 못 채울 때) 규칙 1의 삭제/조회 부분을 **적용하지 말고** add_ledger_entry·다른 tool 호출을 하지 않는다.
 2. 절대로 데이터를 지어내거나 추측하지 마라.
 3. query_ledger 실행 후 개별 거래 내역이나 중간 계산 과정을 채팅창에 나열하지 마라.
    → 반드시 아래 형식으로만 답변해라:
@@ -468,14 +468,14 @@ const TOOLS = [
     function: {
       name: 'query_ledger',
       description:
-        '원장(가계부)에서 거래 내역을 검색합니다. 기간·카테고리·가맹·**가져온 출처(위치/시트명)** 등으로 필터링할 수 있다. 삭제 전 대상을 찾을 때 사용한다.',
+        '원장(가계부)에서 거래 내역을 검색합니다. 기간·카테고리·가맹·**소스(입력/문서/Gmail/연동, 파일명 포함)** 등으로 필터링할 수 있다. 삭제 전 대상을 찾을 때 사용한다.',
       parameters: {
         type: 'object',
         properties: {
           location: {
             type: 'string',
             description:
-              '가져오기/연동 **출처 라벨** 부분일치(예: 구글 시트 "가계부_샘플", "샘플"). `ingest` 로 넣은 거래의 `location` 필드와 매칭한다.',
+              '소스/출처 라벨 부분일치. 예: "입력", "문서", "Gmail", "연동", "가계부_샘플". 호환을 위해 파라미터명은 location이지만 의미는 소스 라벨이다.',
           },
           startDate: {
             type: 'string',
@@ -675,10 +675,31 @@ const TOOLS = [
 // ─── 대화 길이 제한 (토큰 절약) ──────────────────────────────────────────────
 const MAX_HISTORY_MESSAGES = 20
 
+function sanitizeToolCallHistory(messages) {
+  const out = []
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object') continue
+    if (msg.role !== 'tool') {
+      out.push(msg)
+      continue
+    }
+    const prev = out[out.length - 1]
+    const validPrev =
+      prev &&
+      prev.role === 'assistant' &&
+      Array.isArray(prev.tool_calls) &&
+      prev.tool_calls.length > 0
+    if (validPrev) out.push(msg)
+  }
+  return out
+}
+
 function trimHistory(messages) {
-  if (messages.length <= MAX_HISTORY_MESSAGES) return messages
-  // 항상 첫 user 메시지 유지 + 최근 N개
-  return messages.slice(-MAX_HISTORY_MESSAGES)
+  const sliced =
+    messages.length <= MAX_HISTORY_MESSAGES
+      ? messages
+      : messages.slice(-MAX_HISTORY_MESSAGES)
+  return sanitizeToolCallHistory(sliced)
 }
 
 // ─── 핸들러 ───────────────────────────────────────────────────────────────────
