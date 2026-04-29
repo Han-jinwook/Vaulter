@@ -828,7 +828,7 @@ export default function AIChatPanel() {
       <div
         ref={msgContainerRef}
         onScroll={handleMsgScroll}
-        className="flex-grow overflow-y-auto px-3 py-2 space-y-1 text-sm chat-panel-scrollbar"
+        className="flex-grow overflow-y-auto px-3 py-2 text-sm chat-panel-scrollbar"
       >
         {/* 위쪽 이전 대화 로드 표시 */}
         {hasOlderMessages && (
@@ -836,7 +836,7 @@ export default function AIChatPanel() {
             <span className="text-[10px] text-outline/50">위로 스크롤하면 이전 대화를 불러옵니다</span>
           </div>
         )}
-        {visibleMessages.map((msg) => {
+        {visibleMessages.map((msg, msgIndex) => {
           const animate = !initialMsgIdsRef.current.has(msg.id)
           const msgDate = formatDateLabel(msg.createdAt || new Date().toISOString())
           const spotlight = ledgerSpotlightMsgId != null && String(ledgerSpotlightMsgId) === String(msg.id)
@@ -846,6 +846,7 @@ export default function AIChatPanel() {
               data-chat-msg-id={msg.id}
               data-msg-date={msgDate}
               className={[
+                msgIndex > 0 ? 'mt-3 border-t border-outline/25 pt-3' : '',
                 animate ? 'animate-fade-in' : '',
                 spotlight ? 'ledger-msg-spotlight-anchor' : '',
               ]
@@ -869,7 +870,9 @@ export default function AIChatPanel() {
 
         {/* AI Thinking 버블 */}
         {isThinking && (
-          <div className="flex items-end gap-1.5 max-w-[94%] animate-fade-in">
+          <div
+            className={`flex items-end gap-1.5 max-w-[94%] animate-fade-in ${visibleMessages.length > 0 ? 'mt-3 border-t border-outline/25 pt-3' : ''}`}
+          >
             <div className="bg-surface-container-low px-3 py-2 rounded-2xl rounded-tl-none">
               <div className="flex items-center gap-2">
                 <div className="flex gap-0.5">
