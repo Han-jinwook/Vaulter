@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
 
-const weekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일']
+const weekdaysShort = ['일', '월', '화', '수', '목', '금', '토']
 
 function fmtAmount(n) {
   const abs = Math.abs(n).toLocaleString('ko-KR')
@@ -13,7 +13,7 @@ function fmtAmount(n) {
 function fmtDateGroup(rawDate) {
   const [year, month, day] = String(rawDate).split('.').map(Number)
   const d = new Date(year, month - 1, day)
-  return `${String(year).slice(2)}년 ${month}월 ${day}일 ${weekdays[d.getDay()]}`
+  return `${String(year).slice(2)}년 ${month}월 ${day}일(${weekdaysShort[d.getDay()]})`
 }
 
 function dateToTs(rawDate) {
@@ -27,22 +27,22 @@ function buildSourceLabel(tx) {
   const rawDetail = String(tx?.location || '').trim()
   const detailLower = rawDetail.toLowerCase()
 
-  if (source === 'manual') return '소스: 입력'
+  if (source === 'manual') return '입력'
 
   if (source === 'upload') {
-    return rawDetail ? `소스: 문서 · ${rawDetail}` : '소스: 문서'
+    return rawDetail ? `문서 · ${rawDetail}` : '문서'
   }
 
   if (source === 'gmail') {
-    if (!rawDetail || detailLower.includes('gmail')) return '소스: Gmail'
-    return `소스: Gmail · ${rawDetail}`
+    if (!rawDetail || detailLower.includes('gmail')) return 'Gmail'
+    return `Gmail · ${rawDetail}`
   }
 
   if (source === 'webhook') {
-    return rawDetail ? `소스: 연동 · ${rawDetail}` : '소스: 연동'
+    return rawDetail ? `연동 · ${rawDetail}` : '연동'
   }
 
-  return rawDetail ? `소스: ${rawDetail}` : '소스: 기타'
+  return rawDetail || '기타'
 }
 
 export default function TransactionTable() {

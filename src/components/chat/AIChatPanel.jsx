@@ -121,7 +121,7 @@ function merchantKeywordMatch(tx, keyword) {
 function formatQueryFilterSummary(args) {
   const parts = [
     args.startDate && args.endDate ? `기간 ${args.startDate}~${args.endDate}` : null,
-    args.location ? `소스 ${args.location}` : null,
+    args.location ? String(args.location) : null,
     args.category ? `카테고리 ${args.category}` : null,
     args.merchant ? `상호 ${args.merchant}` : null,
     args.account ? `계정 ${args.account}` : null,
@@ -455,7 +455,7 @@ export default function AIChatPanel() {
             chosenStep?.args.startDate && chosenStep?.args.endDate
               ? `${chosenStep.args.startDate} ~ ${chosenStep.args.endDate}`
               : null,
-            chosenStep?.args.location ? `소스:${chosenStep.args.location}` : null,
+            chosenStep?.args.location ? String(chosenStep.args.location) : null,
             chosenStep?.args.category || null,
             chosenStep?.args.merchant || null,
           ].filter(Boolean)
