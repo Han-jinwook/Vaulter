@@ -1184,26 +1184,25 @@ function ChatBubble({
                 )}
               </>
             )}
-            <div className="ml-1 mt-3 text-[11px] font-semibold text-on-surface-variant">계정</div>
-            <div className="mt-1 ml-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+            <div className="mt-3 ml-1 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
               <label htmlFor={`acct-pick-${msg.id}`} className="sr-only">
-                저장된 계정 목록
+                계정 선택
               </label>
               <select
                 id={`acct-pick-${msg.id}`}
                 value={selectSyncedAccount}
                 onChange={(e) => setAccountInput(String(e.target.value))}
                 disabled={sortedAccountChoices.length === 0}
-                className="shrink-0 min-w-[9rem] max-w-full sm:max-w-[45%] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 w-[8.75rem] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-36"
               >
-                <option value="">계정 리스트…</option>
+                <option value="">계정 선택</option>
                 {sortedAccountChoices.map((a) => (
                   <option key={a} value={a}>
                     {a}
                   </option>
                 ))}
               </select>
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <input
                   value={accountInput}
                   onChange={(e) => setAccountInput(e.target.value)}
@@ -1212,7 +1211,7 @@ function ChatBubble({
                       onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
                     }
                   }}
-                  placeholder="직접 입력·수정 후 확인"
+                  placeholder="직접 입력·수정"
                   className="min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                   autoComplete="off"
                 />
