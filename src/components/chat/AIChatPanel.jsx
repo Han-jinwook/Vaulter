@@ -324,9 +324,9 @@ export default function AIChatPanel() {
   const ledgerChatScrollRequest = useUIStore((s) => s.ledgerChatScrollRequest)
   const clearLedgerChatScrollRequest = useUIStore((s) => s.clearLedgerChatScrollRequest)
   const [isThinking, setIsThinking] = useState(false)
-  const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
-  // 채팅 메시지 스크롤 컨테이너 ref
-  const msgContainerRef = useRef(null)
+  // 우측 지기 패널: 원장에서 넘긴 해당 메시지 짧게 강조(입체·반짝)
+  const spotlightClearTimerRef = useRef(null)
+  const [ledgerSpotlightMsgId, setLedgerSpotlightMsgId] = useState(null)
   // OpenAI 대화 히스토리 (세션 내 유지, 미영속)
   const conversationRef = useRef([])
   // 이전 메시지 수 추적
@@ -400,7 +400,14 @@ export default function AIChatPanel() {
     return () => cancelAnimationFrame(id)
   }, [messages.length, scrollChatToBottom, syncHeaderDate])
 
-  // 원장에서 "검토 필요" 거래 클릭 시 → 해당 채팅 블록이 보이도록 로드 분량 확장 후 가운데 스크롤
+  useEffect(() => {
+    return () => {
+      if (spotlightClearTimerRef.current) {
+        window.clearTimeout(spotlightClearTimerRef.current)
+      }
+    }
+  }, [])
+  // 원장에서 "검토 필요" 거래 클릭 시 → 해당 메시지 로드 분량 확장 후, 입력 바로 위에 맞춤 + 짧게 강조
   useLayoutEffect(() => {
     if (!ledgerChatScrollRequest) return
     const { txId } = ledgerChatScrollRequest
@@ -429,7 +436,15 @@ export default function AIChatPanel() {
         }
         const el = root.querySelector(`[data-chat-msg-id="${String(messageId)}"]`)
         if (el) {
-          el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          el.scrollIntoView({ block: 'end', behavior: 'smooth' })
+          if (spotlightClearTimerRef.current) {
+            window.clearTimeout(spotlightClearTimerRef.current)
+          }
+          setLedgerSpotlightMsgId(messageId)
+          spotlightClearTimerRef.current = window.setTimeout(() => {
+            setLedgerSpotlightMsgId(null)
+            spotlightClearTimerRef.current = null
+          }, 7400)
           syncHeaderDate()
         }
         clearLedgerChatScrollRequest()
@@ -821,12 +836,18 @@ export default function AIChatPanel() {
         {visibleMessages.map((msg) => {
           const animate = !initialMsgIdsRef.current.has(msg.id)
           const msgDate = formatDateLabel(msg.createdAt || new Date().toISOString())
+          const spotlight = ledgerSpotlightMsgId != null && String(ledgerSpotlightMsgId) === String(msg.id)
           return (
             <div
               key={msg.id}
               data-chat-msg-id={msg.id}
               data-msg-date={msgDate}
-              className={animate ? 'animate-fade-in' : ''}
+              className={[
+                animate ? 'animate-fade-in' : '',
+                spotlight ? 'ledger-msg-spotlight-shell pb-px' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               <ChatBubble
                 msg={msg}
