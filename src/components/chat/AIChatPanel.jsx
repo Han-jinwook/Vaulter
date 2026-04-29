@@ -840,13 +840,20 @@ export default function AIChatPanel() {
           const animate = !initialMsgIdsRef.current.has(msg.id)
           const msgDate = formatDateLabel(msg.createdAt || new Date().toISOString())
           const spotlight = ledgerSpotlightMsgId != null && String(ledgerSpotlightMsgId) === String(msg.id)
+          const prevMsg = msgIndex > 0 ? visibleMessages[msgIndex - 1] : null
+          const turnAfterPrev =
+            msgIndex === 0
+              ? ''
+              : chatMessageStartsNewTurn(prevMsg, msg)
+                ? 'mt-3 border-t border-outline/25 pt-3'
+                : 'mt-2'
           return (
             <div
               key={msg.id}
               data-chat-msg-id={msg.id}
               data-msg-date={msgDate}
               className={[
-                msgIndex > 0 ? 'mt-3 border-t border-outline/25 pt-3' : '',
+                turnAfterPrev,
                 animate ? 'animate-fade-in' : '',
                 spotlight ? 'ledger-msg-spotlight-anchor' : '',
               ]
@@ -870,9 +877,7 @@ export default function AIChatPanel() {
 
         {/* AI Thinking 버블 */}
         {isThinking && (
-          <div
-            className={`flex items-end gap-1.5 max-w-[94%] animate-fade-in ${visibleMessages.length > 0 ? 'mt-3 border-t border-outline/25 pt-3' : ''}`}
-          >
+          <div className="mt-2 flex items-end gap-1.5 max-w-[94%] animate-fade-in">
             <div className="bg-surface-container-low px-3 py-2 rounded-2xl rounded-tl-none">
               <div className="flex items-center gap-2">
                 <div className="flex gap-0.5">
@@ -896,6 +901,12 @@ export default function AIChatPanel() {
       />
     </aside>
   )
+}
+
+// ── 채팅 턴 구분 (질문+답 한 묶음 / 다음 질 시작 전 선) ────────────────────
+function chatMessageStartsNewTurn(prev, msg) {
+  if (!prev || !msg) return false
+  return msg.role === 'user' && prev.role === 'ai'
 }
 
 // ── 날짜 레이블 포맷 (createdAt ISO → "26년 4월 29일(수)") ─────────────────
