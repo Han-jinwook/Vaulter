@@ -324,6 +324,9 @@ export default function AIChatPanel() {
   const ledgerChatScrollRequest = useUIStore((s) => s.ledgerChatScrollRequest)
   const clearLedgerChatScrollRequest = useUIStore((s) => s.clearLedgerChatScrollRequest)
   const [isThinking, setIsThinking] = useState(false)
+  const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
+  // 채팅 메시지 스크롤 컨테이너 ref
+  const msgContainerRef = useRef(null)
   // 우측 지기 패널: 원장에서 넘긴 해당 메시지 짧게 강조(입체·반짝)
   const spotlightClearTimerRef = useRef(null)
   const [ledgerSpotlightMsgId, setLedgerSpotlightMsgId] = useState(null)
