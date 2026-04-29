@@ -844,7 +844,7 @@ export default function AIChatPanel() {
           const turnAfterPrev =
             msgIndex === 0
               ? ''
-              : chatMessageStartsNewTurn(prevMsg, msg)
+              : chatMessageStartsNewSegment(prevMsg, msg)
                 ? 'mt-3 border-t border-outline/25 pt-3'
                 : 'mt-2'
           return (
@@ -903,10 +903,26 @@ export default function AIChatPanel() {
   )
 }
 
-// ── 채팅 턴 구분 (질문+답 한 묶음 / 다음 질 시작 전 선) ────────────────────
-function chatMessageStartsNewTurn(prev, msg) {
+// ── 채팅 턴/덩어리 구분: 질+답 묶음 유지 · 끊어진 회차(시간 간격)·새 사용자 질문 ────────
+/** createdAt 두 개 모두 파싱 가능할 때 간격(ms) */
+function chatMessageGapMs(prev, msg) {
+  const ta = prev?.createdAt ? Date.parse(String(prev.createdAt)) : NaN
+  const tb = msg?.createdAt ? Date.parse(String(msg.createdAt)) : NaN
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return null
+  return tb - ta
+}
+
+const NEW_SEGMENT_AI_GAP_MS = 15 * 60 * 1000 // 15분 이상 간격이면 별 회차(ai→ai)
+
+/** 구분선(큰 여백) 직후에 오는 새 말풍선인지 */
+function chatMessageStartsNewSegment(prev, msg) {
   if (!prev || !msg) return false
-  return msg.role === 'user' && prev.role === 'ai'
+  if (msg.role === 'user' && prev.role === 'ai') return true
+  if (prev.role === 'ai' && msg.role === 'ai') {
+    const gap = chatMessageGapMs(prev, msg)
+    if (gap != null && gap >= NEW_SEGMENT_AI_GAP_MS) return true
+  }
+  return false
 }
 
 // ── 날짜 레이블 포맷 (createdAt ISO → "26년 4월 29일(수)") ─────────────────

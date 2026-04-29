@@ -830,7 +830,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           type: 'alert',
           text: '멀린님, 내일 아파트 관리비 25만 원 납부일입니다. 이체 후 영수증은 금고에 던져주세요! ✨',
           options: ['롸져!', '확인'],
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         },
       ],
     }))
@@ -844,7 +844,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         ...s.messages.map((m) =>
           m.id === messageId ? { ...m, resolved: true } : m
         ),
-        { id: ++_id, role: 'user', type: 'text', text: label, time: timeNow() },
+        { id: ++_id, role: 'user', type: 'text', text: label, time: timeNow(), createdAt: new Date().toISOString() },
       ],
     }))
   },
@@ -868,7 +868,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           ? {
               id: ++_id,
               ...buildAccountClarifyMessage(tx, s.knownAccounts, s.transactions),
-              time: timeNow(),
+              time: timeNow(), createdAt: new Date().toISOString(),
             }
           : {
               id: ++_id,
@@ -882,7 +882,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
                 { label: '개인 송금', category: '이체' },
                 { label: '직접입력…', category: '__CUSTOM__' },
               ],
-              time: timeNow(),
+              time: timeNow(), createdAt: new Date().toISOString(),
             },
       ],
     }))
@@ -919,7 +919,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           ledgerTxId: txNumId,
           text: `멀린님, ${tx.date} '${tx.name}' ${Math.abs(tx.amount).toLocaleString('ko-KR')}원 내역은 어떤 카테고리로 볼까요?`,
           options: optionsByType,
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         },
       ],
     }))
@@ -1104,7 +1104,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         ...reviewTargets.map((tx) => ({
           id: ++_id,
           ...buildAccountClarifyMessage(tx, s.knownAccounts, [...nextTxs, ...s.transactions]),
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         })),
       ],
     }))
@@ -1227,12 +1227,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
             reviewTargets.length,
             autoCount,
           ),
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         },
         ...reviewTargets.map((tx) => ({
           id: ++_id,
           ...buildAccountClarifyMessage(tx, s.knownAccounts, [...nextTxs, ...s.transactions]),
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         })),
       ],
     }))
@@ -1390,7 +1390,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     set({ isProcessing: true, isDragging: false })
 
     set((s) => ({
-      messages: [...s.messages, { id: ++_id, role: 'ai', type: 'processing', text: '', time: timeNow() }],
+      messages: [...s.messages, { id: ++_id, role: 'ai', type: 'processing', text: '', time: timeNow(), createdAt: new Date().toISOString() }],
     }))
 
     await new Promise((r) => setTimeout(r, 2800))
@@ -1472,7 +1472,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           text: '총 3건의 내역을 분석 및 분류했습니다.',
           subtitle: '직접 하셨다면 약 12분이 소요되었을 작업입니다',
           credit: '-0.3',
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         },
         {
           id: ++_id,
@@ -1486,7 +1486,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
             { label: '개인 송금', category: '이체' },
             { label: '직접입력…', category: '__CUSTOM__' },
           ],
-          time: timeNow(),
+          time: timeNow(), createdAt: new Date().toISOString(),
         },
       ],
     }))
@@ -1516,7 +1516,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           ? {
               id: ++_id,
               ...buildAccountClarifyMessage(newTx, s.knownAccounts, [newTx, ...s.transactions]),
-              time: timeNow(),
+              time: timeNow(), createdAt: new Date().toISOString(),
             }
           : {
               id: ++_id,
@@ -1530,7 +1530,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
                 { label: '생활비', category: '생활비' },
                 { label: '직접입력…', category: '__CUSTOM__' },
               ],
-              time: timeNow(),
+              time: timeNow(), createdAt: new Date().toISOString(),
             },
       ],
     }))
