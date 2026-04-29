@@ -1094,7 +1094,7 @@ function ChatBubble({
     const canSubmit = Boolean(effectiveCategory && accountInput.trim() && msg.txId)
     const selectSyncedAccount = accountChoicesSet.has(accountInput.trim()) ? accountInput.trim() : ''
     return (
-      <div className="flex flex-col gap-1 max-w-[94%]">
+      <div className="flex w-full max-w-[94%] flex-col gap-1 items-stretch">
         <div className="flex items-end gap-1.5">
         <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed')}>
           {msg.text}
@@ -1193,7 +1193,7 @@ function ChatBubble({
                 value={selectSyncedAccount}
                 onChange={(e) => setAccountInput(String(e.target.value))}
                 disabled={sortedAccountChoices.length === 0}
-                className="shrink-0 w-[8.75rem] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-36"
+                className="shrink-0 w-[8.25rem] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-32"
               >
                 <option value="">계정 선택</option>
                 {sortedAccountChoices.map((a) => (
@@ -1202,7 +1202,7 @@ function ChatBubble({
                   </option>
                 ))}
               </select>
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="flex min-w-0 flex-1 basis-0 grow items-center gap-2">
                 <input
                   value={accountInput}
                   onChange={(e) => setAccountInput(e.target.value)}
@@ -1211,7 +1211,7 @@ function ChatBubble({
                       onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
                     }
                   }}
-                  placeholder="계정명 입력"
+                  placeholder="새 계정명 입력"
                   className="min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                   autoComplete="off"
                 />
