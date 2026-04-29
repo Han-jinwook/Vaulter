@@ -135,93 +135,54 @@ body {
   background: rgba(59, 130, 246, 0.65);
 }
 
-/* 원장 → 채팅 점프 시 강조: 불투명 버블 뒤에 깔린 그라데이션(::before 뒷면)만으로는 거의 안 보임 → 외곽 링·배경틴트 우선 */
-.ledger-msg-spotlight-shell {
+/* 원장 → 채팅 점프 시 스크롤 앵커 (말풍선 바로 위에 맞춤) */
+.ledger-msg-spotlight-anchor {
+  scroll-margin-bottom: 0.75rem;
+}
+
+/*
+ * AI 말풍선만: 들뜸/가라암 + 파란 테두리형 광채 (전체 행이 아님)
+ * box-shadow로 깊이와 동시에 청색 하이라이트를 한 키프레임에서 맞춤
+ */
+.ledger-msg-spotlight-bubble {
   position: relative;
   z-index: 1;
-  border-radius: 1.25rem;
-  scroll-margin-bottom: 0.75rem;
-  transform-origin: bottom center;
-  /* 좌우 여백·타임라인 줄에도 살짝 보이도록 전체 줄 틴트 (자식 회색 버블은 그대로, 가장자리와 전체 무드만) */
-  background: linear-gradient(
-    100deg,
-    rgba(219, 234, 254, 0.55) 0%,
-    rgba(191, 219, 254, 0.28) 40%,
-    rgba(239, 246, 255, 0.2) 100%
-  );
-  outline: solid 3px rgb(59, 130, 246); /* 명도 대비 큰 블루 링 — 노안·저시력에 가시성 높임 */
-  outline-offset: 3px;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.95) inset,
-    0 10px 26px rgba(37, 99, 235, 0.2),
-    0 4px 12px rgba(59, 130, 246, 0.16);
-  animation: ledger-spot-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  isolation: isolate;
+  will-change: transform, box-shadow;
+  animation: ledger-ai-breathe 2.4s cubic-bezier(0.45, 0, 0.35, 1) infinite;
 }
-.ledger-msg-spotlight-shell::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  background: radial-gradient(
-    120% 90% at 50% -10%,
-    rgba(147, 197, 253, 0.5),
-    rgba(219, 234, 254, 0.15) 45%,
-    transparent 72%
-  );
-  opacity: 0.95;
-}
-/* 앞쪽에 아주 연한 번쩍 (링·틴트가 메인 역할) */
-.ledger-msg-spotlight-shell::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 0.95rem;
-  pointer-events: none;
-  background: linear-gradient(
-    110deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.55) 50%,
-    transparent 68%
-  );
-  background-size: 240% 100%;
-  mix-blend-mode: soft-light;
-  animation: ledger-spot-twinkle 2.6s ease-in-out infinite;
-}
-@keyframes ledger-spot-rise {
-  from {
-    transform: translateY(6px);
-    opacity: 0.92;
-    filter: saturate(0.85);
-    outline-offset: 8px;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-    filter: saturate(1);
-    outline-offset: 3px;
-  }
-}
-@keyframes ledger-spot-twinkle {
+
+@keyframes ledger-ai-breathe {
   0%,
   100% {
-    background-position: -40% 0;
-    opacity: 0.12;
+    transform: translateY(1px) scale(1);
+    box-shadow:
+      0 2px 8px rgba(15, 23, 42, 0.055),
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 0 0 1px rgba(148, 163, 184, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    filter: saturate(1);
   }
   50% {
-    background-position: 120% 0;
-    opacity: 0.28;
+    transform: translateY(-5px) scale(1.005);
+    box-shadow:
+      0 14px 36px rgba(15, 23, 42, 0.13),
+      0 6px 16px rgba(59, 130, 246, 0.16),
+      0 0 0 2px rgba(147, 197, 253, 0.68),
+      0 0 24px rgba(96, 165, 250, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    filter: saturate(1.06);
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .ledger-msg-spotlight-shell {
+  .ledger-msg-spotlight-bubble {
     animation: none;
-    outline-offset: 3px;
-  }
-  .ledger-msg-spotlight-shell::after {
-    animation: none;
-    opacity: 0;
+    transform: translateY(-2px);
+    will-change: auto;
+    box-shadow:
+      0 8px 22px rgba(15, 23, 42, 0.1),
+      0 0 0 1px rgba(96, 165, 250, 0.42);
   }
 }
 

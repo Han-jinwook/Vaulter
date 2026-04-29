@@ -847,12 +847,13 @@ export default function AIChatPanel() {
               data-msg-date={msgDate}
               className={[
                 animate ? 'animate-fade-in' : '',
-                spotlight ? 'ledger-msg-spotlight-shell pb-px' : '',
+                spotlight ? 'ledger-msg-spotlight-anchor' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
             >
               <ChatBubble
+                spotlight={spotlight}
                 msg={msg}
                 transactions={transactions}
                 knownAccounts={knownAccounts}
@@ -912,8 +913,13 @@ function TimeStamp({ time }) {
   )
 }
 
+function aiSpotlightCn(spotlight, className = '') {
+  return [className.trim(), spotlight ? 'ledger-msg-spotlight-bubble' : ''].filter(Boolean).join(' ')
+}
+
 function ChatBubble({
   msg,
+  spotlight,
   transactions,
   knownAccounts,
   onConfirm,
@@ -969,7 +975,7 @@ function ChatBubble({
   if (msg.type === 'processing') {
     return (
         <div className="flex items-end gap-1.5 max-w-[94%]">
-        <div className="bg-surface-container-low px-3 py-2 rounded-2xl rounded-tl-none">
+        <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low px-3 py-2 rounded-2xl rounded-tl-none')}>
           <div className="flex items-center gap-2">
             <div className="flex gap-0.5">
               <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -987,7 +993,7 @@ function ChatBubble({
   if (msg.type === 'result') {
     return (
       <div className="flex items-end gap-1.5 max-w-[94%]">
-        <div className="bg-primary/5 border border-primary/10 px-3.5 py-2.5 rounded-2xl rounded-tl-none space-y-1.5">
+        <div className={aiSpotlightCn(spotlight, 'bg-primary/5 border border-primary/10 px-3.5 py-2.5 rounded-2xl rounded-tl-none space-y-1.5')}>
           <p className="text-on-surface leading-relaxed font-semibold">{msg.text}</p>
           <div className="pt-1 border-t border-primary/10 flex justify-between items-center text-[11px]">
             <span className="text-on-surface-variant italic">{msg.subtitle}</span>
@@ -1005,7 +1011,7 @@ function ChatBubble({
     return (
       <div className="flex flex-col gap-1 max-w-[94%]">
         <div className="flex items-end gap-1.5">
-        <div className="bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed">
+        <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed')}>
           {msg.text}
         </div>
         <TimeStamp time={msg.time} dateLabel="" />
@@ -1080,7 +1086,7 @@ function ChatBubble({
     return (
       <div className="flex flex-col gap-1 max-w-[94%]">
         <div className="flex items-end gap-1.5">
-        <div className="bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed">
+        <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed')}>
           {msg.text}
         </div>
         <TimeStamp time={msg.time} dateLabel="" />
@@ -1223,11 +1229,14 @@ function ChatBubble({
       <div className="flex flex-col gap-1 max-w-[94%]">
         <div className="flex items-end gap-1.5">
         <div
-          className={`px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed border ${
-            msg.resolved
-              ? 'bg-surface-container-low border-surface-container'
-              : 'bg-gradient-to-r from-[#FFD700] via-[#FFEA70] to-[#F1C40F] border-[#FFD700]/80 alert-gold-glow'
-          }`}
+          className={aiSpotlightCn(
+            spotlight,
+            `px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed border ${
+              msg.resolved
+                ? 'bg-surface-container-low border-surface-container'
+                : 'bg-gradient-to-r from-[#FFD700] via-[#FFEA70] to-[#F1C40F] border-[#FFD700]/80 alert-gold-glow'
+            }`,
+          )}
         >
           <p className={`${msg.resolved ? 'text-on-surface' : 'text-[#121212]'} font-semibold`}>{msg.text}</p>
         </div>
@@ -1254,7 +1263,7 @@ function ChatBubble({
     return (
       <div className="flex flex-col gap-1 max-w-[94%]">
         <div className="flex items-end gap-1.5">
-        <div className="bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed border border-primary/15">
+        <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed border border-primary/15')}>
           <p className="font-semibold">{msg.text}</p>
         </div>
         <TimeStamp time={msg.time} dateLabel="" />
@@ -1295,7 +1304,7 @@ function ChatBubble({
 
   return (
     <div className="flex items-end gap-1.5 max-w-[94%]">
-      <div className="bg-surface-container-low text-on-surface px-3.5 py-2 rounded-2xl rounded-tl-none leading-relaxed">
+      <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2 rounded-2xl rounded-tl-none leading-relaxed')}>
         <MessageWithActionLinks text={msg.text} className="text-on-surface" />
       </div>
       <TimeStamp time={msg.time} dateLabel="" />
