@@ -1216,16 +1216,16 @@ function ChatBubble({
             )}
             <div className="mt-3 ml-1 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
               <label htmlFor={`acct-pick-${msg.id}`} className="sr-only">
-                계정 선택
+                목록에서 계정 선택
               </label>
               <select
                 id={`acct-pick-${msg.id}`}
                 value={selectSyncedAccount}
                 onChange={(e) => setAccountInput(String(e.target.value))}
                 disabled={sortedAccountChoices.length === 0}
-                className="shrink-0 w-[8.25rem] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-32"
+                className="min-w-[11rem] shrink-0 truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[12rem]"
               >
-                <option value="">계정 선택</option>
+                <option value="">목록에서 계정 선택</option>
                 {sortedAccountChoices.map((a) => (
                   <option key={a} value={a}>
                     {a}
