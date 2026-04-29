@@ -744,7 +744,7 @@ export default function AIChatPanel() {
           </div>
           {/* 현재 뷰포트 최상단 메시지 날짜 */}
           {headerDate && (
-            <span className="text-[10px] text-outline/80 font-medium shrink-0">{headerDate}</span>
+            <span className="text-xs text-on-surface-variant font-medium shrink-0">{headerDate}</span>
           )}
         </div>
       </div>
@@ -812,12 +812,13 @@ export default function AIChatPanel() {
   )
 }
 
-// ── 날짜 레이블 포맷 (createdAt ISO → "4월 13일 (월)") ──────────────────────
+// ── 날짜 레이블 포맷 (createdAt ISO → "26년 4월 29일(수)") ─────────────────
 function formatDateLabel(isoStr) {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   const days = ['일', '월', '화', '수', '목', '금', '토']
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${yy}년 ${d.getMonth() + 1}월 ${d.getDate()}일(${days[d.getDay()]})`
 }
 
 // ── 버블 옆 타임스탬프 ────────────────────────────────────────────────────────
