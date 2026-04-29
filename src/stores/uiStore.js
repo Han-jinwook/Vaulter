@@ -72,8 +72,21 @@ export const useUIStore = create((set) => ({
   setVizFilter: (f) => set({ vizFilter: f }),
   clearVizFilter: () => set({ vizFilter: null }),
 
-  /** AI open_vault_document — 좌측 금고 뷰어+요약 */
-  vaultTheaterRequest: null,
+  /** 원장 검토 필요 클릭 → 지기 채팅 해당 대화 블록으로 스크롤 */
+  ledgerChatScrollRequest: null,
+  requestLedgerChatScrollToTx: (txId) =>
+    set((state) =>
+      txId == null || String(txId).trim() === ''
+        ? { ledgerChatScrollRequest: null }
+        : {
+            isChatPanelOpen: true,
+            ledgerChatScrollRequest: {
+              txId: String(txId),
+              nonce: (state.ledgerChatScrollRequest?.nonce ?? 0) + 1,
+            },
+          },
+    ),
+  clearLedgerChatScrollRequest: () => set({ ledgerChatScrollRequest: null }),
   setVaultTheaterRequest: (payload) => set({ vaultTheaterRequest: payload }),
   clearVaultTheaterRequest: () => set({ vaultTheaterRequest: null }),
 }))

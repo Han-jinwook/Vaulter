@@ -196,6 +196,18 @@ function formatNeedAccountFactLine(summary) {
   return parts.length ? `${parts.join(', ')}.` : ''
 }
 
+/** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
+function findChatMessageForLedgerTx(messages, txId) {
+  const id = String(txId ?? '')
+  if (!id) return null
+  const prefer = ['account_confirm', 'confirm', 'ledger_review']
+  for (const tp of prefer) {
+    const m = messages.find((x) => x.txId != null && String(x.txId) === id && x.type === tp)
+    if (m) return m
+  }
+  return messages.find((x) => x.txId != null && String(x.txId) === id) ?? null
+}
+
 // 로컬 원장 쿼리 (client-side tool 실행)
 function runQueryLedger(transactions, args) {
   const {
@@ -309,6 +321,8 @@ export default function AIChatPanel() {
   const setAiFilter = useUIStore((s) => s.setAiFilter)
   const setVizFilter = useUIStore((s) => s.setVizFilter)
   const clearVizFilter = useUIStore((s) => s.clearVizFilter)
+  const ledgerChatScrollRequest = useUIStore((s) => s.ledgerChatScrollRequest)
+  const clearLedgerChatScrollRequest = useUIStore((s) => s.clearLedgerChatScrollRequest)
   const [isThinking, setIsThinking] = useState(false)
   const [thinkingLabel, setThinkingLabel] = useState('생각하는 중...')
   // 채팅 메시지 스크롤 컨테이너 ref
@@ -385,6 +399,49 @@ export default function AIChatPanel() {
     })
     return () => cancelAnimationFrame(id)
   }, [messages.length, scrollChatToBottom, syncHeaderDate])
+
+  // 원장에서 "검토 필요" 거래 클릭 시 → 해당 채팅 블록이 보이도록 로드 분량 확장 후 가운데 스크롤
+  useLayoutEffect(() => {
+    if (!ledgerChatScrollRequest) return
+    const { txId } = ledgerChatScrollRequest
+    const target = findChatMessageForLedgerTx(messages, txId)
+    if (!target) {
+      clearLedgerChatScrollRequest()
+      return
+    }
+    const idx = messages.findIndex((m) => m.id === target.id)
+    if (idx < 0) {
+      clearLedgerChatScrollRequest()
+      return
+    }
+    const needCount = messages.length - idx
+    if (displayCount < needCount) {
+      setDisplayCount(needCount)
+      return
+    }
+    const messageId = target.id
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const root = msgContainerRef.current
+        if (!root) {
+          clearLedgerChatScrollRequest()
+          return
+        }
+        const el = root.querySelector(`[data-chat-msg-id="${String(messageId)}"]`)
+        if (el) {
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          syncHeaderDate()
+        }
+        clearLedgerChatScrollRequest()
+      })
+    })
+  }, [
+    ledgerChatScrollRequest,
+    messages,
+    displayCount,
+    clearLedgerChatScrollRequest,
+    syncHeaderDate,
+  ])
 
   // load more 후 스크롤 위치 복원
   useEffect(() => {
@@ -767,6 +824,7 @@ export default function AIChatPanel() {
           return (
             <div
               key={msg.id}
+              data-chat-msg-id={msg.id}
               data-msg-date={msgDate}
               className={animate ? 'animate-fade-in' : ''}
             >

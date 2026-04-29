@@ -68,6 +68,7 @@ export default function TransactionTable() {
   }, [transactions])
   const aiFilter = useUIStore((s) => s.aiFilter)
   const clearAiFilter = useUIStore((s) => s.clearAiFilter)
+  const requestLedgerChatScrollToTx = useUIStore((s) => s.requestLedgerChatScrollToTx)
   const [editingCell, setEditingCell] = useState(null)
   const [draftValue, setDraftValue] = useState('')
 
@@ -306,11 +307,19 @@ export default function TransactionTable() {
                             분류 대기
                           </span>
                         )}
-                        {tx.status === 'PENDING' && (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] rounded-full font-bold">
+                        {tx.status === 'PENDING' ? (
+                          <button
+                            type="button"
+                            title="관련 채팅 보기"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              requestLedgerChatScrollToTx(tx.id)
+                            }}
+                            className="px-2 py-1 bg-red-100 text-red-700 text-[10px] rounded-full font-bold hover:bg-red-200/90 transition-colors"
+                          >
                             🚨 검토 필요
-                          </span>
-                        )}
+                          </button>
+                        ) : null}
                       </div>
 
                       {isEditing(tx.id, 'amount') ? (
