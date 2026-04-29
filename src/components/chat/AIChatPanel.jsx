@@ -1211,7 +1211,7 @@ function ChatBubble({
                       onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
                     }
                   }}
-                  placeholder="직접 입력·수정"
+                  placeholder="계정명 입력"
                   className="min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                   autoComplete="off"
                 />
