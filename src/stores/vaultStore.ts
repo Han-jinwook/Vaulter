@@ -304,18 +304,69 @@ function buildConfirmOptionsForTx(tx: VaultTransaction): ConfirmOption[] {
   ]
 }
 
+/** 계정 목록 후보 전체를 드롭다운에 올린다 — 개수 자체에 상한 두지 않음(유일값·소트만). */
 function buildAccountOptions(knownAccounts: string[]): ConfirmOption[] {
-  const unique = Array.from(new Set(knownAccounts.map((x) => String(x || '').trim()).filter(Boolean)))
-  if (!unique.length) {
-    return []
-  }
-  return [
-    ...unique.slice(0, 3).map((account) => ({ label: account, category: account })),
-  ]
+  const unique = Array.from(
+    new Set(knownAccounts.map((x) => String(x || '').trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, 'ko'))
+  if (!unique.length) return []
+  return unique.map((account) => ({ label: account, category: account }))
 }
 
 function hasMeaningfulCategory(tx: Pick<VaultTransaction, 'category'>): boolean {
   return Boolean(String(tx?.category || '').trim())
+}
+
+function normalizeMerchantSlug(s: string): string {
+  return String(s || '').toLowerCase().replace(/\s+/g, '')
+}
+
+function merchantsLooselySame(a: string, b: string): boolean {
+  const na = normalizeMerchantSlug(a)
+  const nb = normalizeMerchantSlug(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (na.length < 4 || nb.length < 4) return false
+  return na.includes(nb) || nb.includes(na)
+}
+
+/** 항목(분류): 원장 과거 거래 매칭 → 최대 3 + 직접입력 … */
+function pickCategoryCandidates(
+  tx: VaultTransaction,
+  transactions: VaultTransaction[],
+): ConfirmOption[] {
+  const scores = new Map<string, number>()
+  for (const o of transactions) {
+    if (o.id === tx.id) continue
+    if (o.status !== 'CONFIRMED') continue
+    const m1 = String(tx.name || tx.merchant || '').trim()
+    const m2 = String(o.name || o.merchant || '').trim()
+    if (!merchantsLooselySame(m1, m2)) continue
+    const c = String(o.category || '').trim()
+    if (!c || c === '기타') continue
+    scores.set(c, (scores.get(c) ?? 0) + 1)
+  }
+  const fromHistory = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([category]) => ({ label: category, category }))
+
+  const pool = buildConfirmOptionsForTx(tx).filter((x) => x.category !== '__CUSTOM__')
+  const merged: ConfirmOption[] = []
+  const seen = new Set<string>()
+  for (const opt of [...fromHistory, ...pool]) {
+    if (seen.has(opt.category)) continue
+    seen.add(opt.category)
+    merged.push(opt)
+    if (merged.length >= 3) break
+  }
+  while (merged.length < 3 && pool.length > 0) {
+    const p = pool.find((x) => !seen.has(x.category))
+    if (!p) break
+    seen.add(p.category)
+    merged.push(p)
+  }
+  return [...merged, { label: '직접입력…', category: '__CUSTOM__' }]
 }
 
 function toFactDate(dateText: string): string {
@@ -364,9 +415,10 @@ function needsAccountClarification(tx: Pick<VaultTransaction, 'account'>): boole
 function buildAccountClarifyMessage(
   tx: VaultTransaction,
   knownAccounts: string[],
+  transactionsForCategoryHints: VaultTransaction[] = [],
 ): Omit<ChatMessage, 'id' | 'time'> {
   const factLine = buildFactLineForTx(tx)
-  const category = String(tx.category || '').trim() || '기타'
+  const lockedCategoryRaw = String(tx.category || '').trim()
   const isIncome = tx.type === 'INCOME' || Number(tx.amount) > 0
   const acc = String(tx.account || '').trim()
   const bankVague =
@@ -393,12 +445,16 @@ function buildAccountClarifyMessage(
     }
     return `**어느 카드·현금·통장**으로 결제·출금하셨는지 알려 주세요.`
   })()
+  const categoryOptionsForMsg: ConfirmOption[] = lockedCategoryRaw
+    ? [{ label: lockedCategoryRaw, category: lockedCategoryRaw }]
+    : pickCategoryCandidates(tx, transactionsForCategoryHints)
+
   return {
     role: 'ai',
     type: 'account_confirm',
     text: `${factLine}\n${question}`,
     txId: Number(tx.id),
-    options: [{ label: category, category }],
+    options: categoryOptionsForMsg,
     accountOptions: buildAccountOptions([String(tx.account || ''), ...knownAccounts]),
   }
 }
@@ -811,7 +867,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         categoryLocked
           ? {
               id: ++_id,
-              ...buildAccountClarifyMessage(tx, s.knownAccounts),
+              ...buildAccountClarifyMessage(tx, s.knownAccounts, s.transactions),
               time: timeNow(),
             }
           : {
@@ -1047,7 +1103,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         ...s.messages,
         ...reviewTargets.map((tx) => ({
           id: ++_id,
-          ...buildAccountClarifyMessage(tx, s.knownAccounts),
+          ...buildAccountClarifyMessage(tx, s.knownAccounts, [...nextTxs, ...s.transactions]),
           time: timeNow(),
         })),
       ],
@@ -1175,7 +1231,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         },
         ...reviewTargets.map((tx) => ({
           id: ++_id,
-          ...buildAccountClarifyMessage(tx, s.knownAccounts),
+          ...buildAccountClarifyMessage(tx, s.knownAccounts, [...nextTxs, ...s.transactions]),
           time: timeNow(),
         })),
       ],
@@ -1459,7 +1515,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         categoryLocked
           ? {
               id: ++_id,
-              ...buildAccountClarifyMessage(newTx, s.knownAccounts),
+              ...buildAccountClarifyMessage(newTx, s.knownAccounts, [newTx, ...s.transactions]),
               time: timeNow(),
             }
           : {

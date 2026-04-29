@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import IsolatedChatComposer from './IsolatedChatComposer'
 import { MessageWithActionLinks } from './MessageWithActionLinks'
 import { useVaultStore } from '../../stores/vaultStore'
@@ -944,6 +944,16 @@ function ChatBubble({
       .map((a) => ({ label: a, category: a }))
   })()
 
+  const sortedAccountChoices = useMemo(() => {
+    const opts = Array.isArray(liveAccountOptions) ? liveAccountOptions : []
+    const labels = opts
+      .map((o) => String(o.category ?? o.label ?? '').trim())
+      .filter(Boolean)
+    return Array.from(new Set(labels)).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [liveAccountOptions])
+
+  const accountChoicesSet = useMemo(() => new Set(sortedAccountChoices), [sortedAccountChoices])
+
   useEffect(() => {
     if (msg.type !== 'account_confirm') return
     if (!selectedCategory.trim() && tx?.category) {
@@ -1079,10 +1089,10 @@ function ChatBubble({
     const effectiveCategory = categoryLocked
       ? String(categoryOptions[0]?.category || '').trim()
       : selectedCategory.trim()
-    const isPresetAccountSelected = liveAccountOptions.some(
-      (opt) => String(opt.category || '').trim() === accountInput.trim(),
-    )
+    const categoryPickOptions = categoryOptions.filter((o) => o.category !== '__CUSTOM__')
+    const hasCustomCategoryHint = categoryOptions.some((o) => o.category === '__CUSTOM__')
     const canSubmit = Boolean(effectiveCategory && accountInput.trim() && msg.txId)
+    const selectSyncedAccount = accountChoicesSet.has(accountInput.trim()) ? accountInput.trim() : ''
     return (
       <div className="flex flex-col gap-1 max-w-[94%]">
         <div className="flex items-end gap-1.5">
@@ -1100,16 +1110,18 @@ function ChatBubble({
               </div>
             ) : (
               <>
-                <div className="ml-1 mt-1 text-[11px] font-semibold text-on-surface-variant">항목</div>
+                <div className="ml-1 mt-2 text-[11px] leading-tight text-on-surface-variant">
+                  <span className="font-semibold">항목</span>{' '}
+                  <span className="text-outline/80 font-normal">
+                    (과거 유사 거래·추천 — 택 1)
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2 mt-1 ml-1">
-                  {categoryOptions.map((opt) => (
+                  {categoryPickOptions.map((opt) => (
                     <button
-                      key={opt.label}
+                      key={`${opt.category}-${opt.label}`}
+                      type="button"
                       onClick={() => {
-                        if (opt.category === '__CUSTOM__') {
-                          setIsCustomInputOpen(true)
-                          return
-                        }
                         setSelectedCategory(opt.category)
                         setIsCustomInputOpen(false)
                         setCustomCategory('')
@@ -1123,6 +1135,19 @@ function ChatBubble({
                       {opt.label}
                     </button>
                   ))}
+                  {hasCustomCategoryHint && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomInputOpen(true)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border border-dashed transition-all duration-200 active:scale-95 ${
+                        isCustomInputOpen
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-primary/5 text-primary border-primary/30 hover:bg-primary/15'
+                      }`}
+                    >
+                      직접 입력…
+                    </button>
+                  )}
                 </div>
                 {isCustomInputOpen && (
                   <div className="mt-2 ml-1 flex items-center gap-2">
@@ -1133,17 +1158,18 @@ function ChatBubble({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           const next = customCategory.trim()
-                          if (!next || !msg.txId) return
+                          if (!next) return
                           setSelectedCategory(next)
                           setIsCustomInputOpen(false)
                           setCustomCategory('')
                         }
                         if (e.key === 'Escape') setIsCustomInputOpen(false)
                       }}
-                      placeholder="계정명 입력 (예: 통장1)"
+                      placeholder="항목 입력 (예: 구독, 식비)"
                       className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                     <button
+                      type="button"
                       onClick={() => {
                         const next = customCategory.trim()
                         if (!next) return
@@ -1159,51 +1185,46 @@ function ChatBubble({
               </>
             )}
             <div className="ml-1 mt-3 text-[11px] font-semibold text-on-surface-variant">계정</div>
-            {liveAccountOptions.length > 0 ? (
-              <div className="flex flex-wrap gap-2 mt-1 ml-1">
-                {liveAccountOptions.map((opt) => (
-                  <button
-                    key={opt.label}
-                    onClick={() => {
-                      const chosenAccount = String(opt.category || '').trim()
-                      if (!chosenAccount) return
-                      setAccountInput(chosenAccount)
-                      if (msg.txId && effectiveCategory) {
-                        onCompleteReview(String(msg.txId), effectiveCategory, chosenAccount)
-                      }
-                    }}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
-                      accountInput === opt.category
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
+            <div className="mt-1 ml-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+              <label htmlFor={`acct-pick-${msg.id}`} className="sr-only">
+                저장된 계정 목록
+              </label>
+              <select
+                id={`acct-pick-${msg.id}`}
+                value={selectSyncedAccount}
+                onChange={(e) => setAccountInput(String(e.target.value))}
+                disabled={sortedAccountChoices.length === 0}
+                className="shrink-0 min-w-[9rem] max-w-full sm:max-w-[45%] truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">계정 리스트…</option>
+                {sortedAccountChoices.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
                 ))}
-              </div>
-            ) : null}
-            <div className="mt-2 ml-1 flex items-center gap-2">
-              <input
-                value={accountInput}
-                onChange={(e) => setAccountInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && canSubmit) {
-                    onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
-                  }
-                }}
-                placeholder="계정명 직접입력 (예: 통장1, 현대카드)"
-                className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-              {!isPresetAccountSelected && (
+              </select>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <input
+                  value={accountInput}
+                  onChange={(e) => setAccountInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && canSubmit) {
+                      onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
+                    }
+                  }}
+                  placeholder="직접 입력·수정 후 확인"
+                  className="min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  autoComplete="off"
+                />
                 <button
+                  type="button"
                   onClick={() => onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())}
                   disabled={!canSubmit}
-                  className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
+                  className="shrink-0 px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
                 >
                   확인
                 </button>
-              )}
+              </div>
             </div>
           </>
         ) : (
