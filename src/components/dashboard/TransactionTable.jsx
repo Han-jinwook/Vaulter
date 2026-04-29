@@ -144,7 +144,7 @@ export default function TransactionTable() {
   return (
     <div
       id="data-vault-ledger"
-      className="bg-surface-container-lowest rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col min-h-[420px]"
+      className="bg-surface-container-lowest rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden min-h-[360px] max-h-[min(70dvh,calc(100dvh-20rem))]"
     >
       {/* Header */}
       <div className="sticky top-0 z-10 bg-surface-container-lowest/95 backdrop-blur px-5 py-4 border-b border-surface-container">
@@ -176,7 +176,7 @@ export default function TransactionTable() {
               {ledgerContextTitle}
             </h3>
             <p className="mt-1 text-[11px] text-on-surface-variant">
-              내부 스크롤 대신 페이지를 그대로 내려 전체 원장을 이어서 볼 수 있어요.
+              원장 목록은 카드 안쪽에서만 스크롤됩니다.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -204,7 +204,7 @@ export default function TransactionTable() {
         </div>
       </div>
 
-      <div className="px-4 pb-4">
+      <div className="ledger-scrollbar-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         {groupedTransactions.map((group) => (
           <div key={group.date} className="pt-3">
             <div className="text-gray-500 text-xs font-medium pb-1.5">{fmtDateGroup(group.date)}</div>

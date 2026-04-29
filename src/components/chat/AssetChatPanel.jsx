@@ -387,7 +387,7 @@ export default function AssetChatPanel() {
       <div
         ref={msgContainerRef}
         onScroll={handleMsgScroll}
-        className="flex-grow overflow-y-auto px-3 py-2 space-y-2 text-sm custom-scrollbar min-h-[220px]"
+        className="flex-grow overflow-y-auto px-3 py-2 space-y-2 text-sm chat-panel-scrollbar min-h-[220px]"
       >
         {hasOlderMessages && (
           <div className="text-center py-1">

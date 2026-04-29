@@ -753,7 +753,7 @@ export default function AIChatPanel() {
       <div
         ref={msgContainerRef}
         onScroll={handleMsgScroll}
-        className="flex-grow overflow-y-auto px-3 py-2 space-y-1 text-sm custom-scrollbar"
+        className="flex-grow overflow-y-auto px-3 py-2 space-y-1 text-sm chat-panel-scrollbar"
       >
         {/* 위쪽 이전 대화 로드 표시 */}
         {hasOlderMessages && (

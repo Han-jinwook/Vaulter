@@ -96,6 +96,45 @@ body {
   border-radius: 10px;
 }
 
+/* 원장 카드 안 목록 스크롤 — 뷰포트 우측이 아니라 카드 오른쪽에 붙도록 전용 영역에서만 움직임 */
+.ledger-scrollbar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.62) transparent;
+}
+.ledger-scrollbar-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+.ledger-scrollbar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ledger-scrollbar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.55);
+  border-radius: 9999px;
+}
+.ledger-scrollbar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 140, 160, 0.75);
+}
+
+/* 우측 AI 채팅 패널 메시지 영역 — 배경과 구분되는 연한 파랑 트랙 느낌 */
+.chat-panel-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.7) transparent;
+}
+.chat-panel-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-panel-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 9999px;
+}
+.chat-panel-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.55);
+  border-radius: 9999px;
+}
+.chat-panel-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.65);
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
