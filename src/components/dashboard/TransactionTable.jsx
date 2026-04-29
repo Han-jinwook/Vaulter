@@ -351,6 +351,18 @@ export default function TransactionTable() {
   )
 }
 
+/** 필터 문자열과 겹치는 계정을 위로 올리고 나머지도 함께 보여 줌 — 수정 모드에서도 전체 드롭다운 유지 */
+function sortAccountsForPicker(accounts, filterText) {
+  const raw = [...accounts]
+  const term = String(filterText || '').trim().toLowerCase()
+  if (!term) return raw.sort((a, b) => a.localeCompare(b, 'ko'))
+  const hits = raw.filter((a) => a.toLowerCase().includes(term))
+  const rest = raw.filter((a) => !a.toLowerCase().includes(term))
+  hits.sort((a, b) => a.localeCompare(b, 'ko'))
+  rest.sort((a, b) => a.localeCompare(b, 'ko'))
+  return [...hits, ...rest]
+}
+
 function FilterChip({ label, active, onClick }) {
   return (
     <button
@@ -399,7 +411,7 @@ function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, on
       setDropRect({
         top: r.bottom + 4,
         left: r.left,
-        width: Math.max(r.width, 136),
+        width: Math.max(r.width, 168),
       })
     }
     update()
@@ -424,8 +436,9 @@ function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, on
     return () => document.removeEventListener('mousedown', handler)
   }, [onCommit])
 
-  const filtered = suggestedAccounts.filter((a) =>
-    !value || a.toLowerCase().includes(value.toLowerCase()),
+  const orderedAccounts = useMemo(
+    () => sortAccountsForPicker(suggestedAccounts, value),
+    [suggestedAccounts, value],
   )
 
   return (
@@ -442,7 +455,7 @@ function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, on
         placeholder="계정 입력..."
         className="w-28 px-2 py-1 text-xs border border-primary/40 rounded-md outline-none focus:ring-2 focus:ring-primary/20 bg-white"
       />
-      {filtered.length > 0 && dropRect && createPortal(
+      {orderedAccounts.length > 0 && dropRect && createPortal(
         <div
           ref={panelRef}
           data-account-dropdown-panel=""
@@ -456,7 +469,7 @@ function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, on
           }}
           className="bg-white border border-surface-container rounded-xl shadow-xl py-1 max-h-52 overflow-y-auto box-border"
         >
-          {filtered.map((acct) => (
+          {orderedAccounts.map((acct) => (
             <button
               key={acct}
               type="button"
