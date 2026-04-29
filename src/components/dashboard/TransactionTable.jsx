@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
@@ -55,8 +55,17 @@ export default function TransactionTable() {
     ledgerContextTitle,
     activeLedgerFilter,
     setLedgerContextByFilter,
-    knownAccounts,
   } = useVaultStore()
+
+  const confirmedAccountSuggestions = useMemo(() => {
+    const names = new Set()
+    for (const tx of transactions) {
+      if (tx.status !== 'CONFIRMED') continue
+      const acc = String(tx.account ?? '').trim()
+      if (acc) names.add(acc)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [transactions])
   const aiFilter = useUIStore((s) => s.aiFilter)
   const clearAiFilter = useUIStore((s) => s.clearAiFilter)
   const [editingCell, setEditingCell] = useState(null)
@@ -263,7 +272,7 @@ export default function TransactionTable() {
                           <AccountDropdown
                             value={draftValue}
                             setValue={setDraftValue}
-                            knownAccounts={knownAccounts}
+                            suggestedAccounts={confirmedAccountSuggestions}
                             onCommit={commitEdit}
                             onCancel={cancelEdit}
                           />
@@ -364,30 +373,49 @@ function InlineInput({ value, setValue, onCommit, onCancel }) {
   )
 }
 
-function AccountDropdown({ value, setValue, knownAccounts = [], onCommit, onCancel }) {
+function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, onCancel }) {
   const inputRef = useRef(null)
+  const panelRef = useRef(null)
   const [dropRect, setDropRect] = useState(null)
 
-  // 인풋 위치 계산 (overflow-hidden 부모 탈출용)
-  useEffect(() => {
-    if (inputRef.current) {
-      const r = inputRef.current.getBoundingClientRect()
-      setDropRect({ top: r.bottom + 4, right: window.innerWidth - r.right })
+  useLayoutEffect(() => {
+    const update = () => {
+      const el = inputRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      if (r.width < 1 && r.height < 1) {
+        requestAnimationFrame(update)
+        return
+      }
+      setDropRect({
+        top: r.bottom + 4,
+        left: r.left,
+        width: Math.max(r.width, 136),
+      })
     }
-  }, [])
+    update()
+    const raf = requestAnimationFrame(update)
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [value])
 
-  // 외부 클릭 시 확정
   useEffect(() => {
     const handler = (e) => {
-      if (inputRef.current && !inputRef.current.closest('[data-account-dropdown]')?.contains(e.target)) {
-        onCommit()
-      }
+      const t = e.target
+      if (!(t instanceof Node)) return
+      if (inputRef.current?.contains(t) || panelRef.current?.contains(t)) return
+      onCommit()
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [onCommit])
 
-  const filtered = knownAccounts.filter((a) =>
+  const filtered = suggestedAccounts.filter((a) =>
     !value || a.toLowerCase().includes(value.toLowerCase()),
   )
 
@@ -407,9 +435,17 @@ function AccountDropdown({ value, setValue, knownAccounts = [], onCommit, onCanc
       />
       {filtered.length > 0 && dropRect && createPortal(
         <div
+          ref={panelRef}
+          data-account-dropdown-panel=""
           data-account-dropdown=""
-          style={{ position: 'fixed', top: dropRect.top, right: dropRect.right, zIndex: 9999 }}
-          className="bg-white border border-surface-container rounded-xl shadow-xl py-1 min-w-[130px] max-h-52 overflow-y-auto"
+          style={{
+            position: 'fixed',
+            top: dropRect.top,
+            left: dropRect.left,
+            width: dropRect.width,
+            zIndex: 9999,
+          }}
+          className="bg-white border border-surface-container rounded-xl shadow-xl py-1 max-h-52 overflow-y-auto box-border"
         >
           {filtered.map((acct) => (
             <button
