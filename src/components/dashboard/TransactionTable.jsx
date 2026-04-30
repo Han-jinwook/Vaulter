@@ -117,10 +117,11 @@ export default function TransactionTable() {
     setDraftValue(String(value ?? ''))
   }
 
-  const commitEdit = () => {
+  const commitEdit = (explicitValue) => {
     if (!editingCell) return
     const { txId, field } = editingCell
-    const nextRaw = draftValue.trim()
+    const source = explicitValue !== undefined ? String(explicitValue) : draftValue
+    const nextRaw = source.trim()
     if (field === 'amount') {
       const numeric = Number(nextRaw.replace(/[^\d.-]/g, ''))
       if (!Number.isFinite(numeric) || numeric <= 0) {
@@ -476,7 +477,7 @@ function AccountDropdown({ value, setValue, suggestedAccounts = [], onCommit, on
               onMouseDown={(e) => {
                 e.preventDefault()
                 setValue(acct)
-                setTimeout(onCommit, 0)
+                onCommit(acct)
               }}
               className={`w-full text-left px-3 py-2 text-xs hover:bg-primary/10 transition-colors ${
                 value === acct ? 'text-primary font-bold bg-primary/5' : 'text-on-surface'
