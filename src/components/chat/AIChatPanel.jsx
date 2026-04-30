@@ -211,8 +211,12 @@ function findChatMessageForLedgerTx(messages, txId) {
   return messages.find((x) => x.txId != null && String(x.txId) === id) ?? null
 }
 
+function normalizeLedgerAccountLabel(s) {
+  return String(s || '').trim().normalize('NFKC')
+}
+
 // 로컬 원장 쿼리 (client-side tool 실행)
-function runQueryLedger(transactions, args) {
+function runQueryLedger(transactions, args, knownAccountsList = []) {
   const {
     startDate,
     endDate,
@@ -258,20 +262,32 @@ function runQueryLedger(transactions, args) {
     results = results.filter((tx) => fuzzyCategoryMatch(tx.category, category))
   }
   if (account) {
-    const accQ = String(account || '').trim()
-    if (!accQ) {
+    const accQRaw = String(account || '').trim()
+    if (!accQRaw) {
       /* skip */
     } else {
-      const distinct = [...new Set(transactions.map((t) => String(t.account || '').trim()).filter(Boolean))]
-      const accHits = distinct.filter((a) => fuzzyTextMatch(a, accQ))
-      if (accHits.length >= 2) {
-        accountAmbiguous = true
-        ambiguousAccounts = [...accHits.slice(0, 20)].sort((a, b) => a.localeCompare(b, 'ko'))
-        results = []
-      } else if (accHits.length === 1) {
-        results = results.filter((tx) => fuzzyTextMatch(tx.account, accHits[0]))
+      const accQNorm = normalizeLedgerAccountLabel(accQRaw)
+      const txAccounts = transactions.map((t) => String(t.account || '').trim()).filter(Boolean)
+      const mergedPool = [...new Set([...txAccounts, ...(Array.isArray(knownAccountsList) ? knownAccountsList : []).map((x) => String(x || '').trim()).filter(Boolean)])]
+      /** @type string[] — 등록/원장에서 본 문자열 원문 후보 */
+      const pool = [...new Set(mergedPool)]
+
+      const exactHit = pool.find((a) => normalizeLedgerAccountLabel(a) === accQNorm)
+      if (exactHit) {
+        const exactNorm = normalizeLedgerAccountLabel(exactHit)
+        results = results.filter((tx) => normalizeLedgerAccountLabel(tx.account) === exactNorm)
       } else {
-        results = results.filter((tx) => fuzzyTextMatch(tx.account, accQ))
+        const accHits = pool.filter((a) => fuzzyTextMatch(a, accQRaw))
+        if (accHits.length >= 2) {
+          accountAmbiguous = true
+          ambiguousAccounts = [...accHits.slice(0, 20)].sort((a, b) => a.localeCompare(b, 'ko'))
+          results = []
+        } else if (accHits.length === 1) {
+          const onlyNorm = normalizeLedgerAccountLabel(accHits[0])
+          results = results.filter((tx) => normalizeLedgerAccountLabel(tx.account) === onlyNorm)
+        } else {
+          results = results.filter((tx) => fuzzyTextMatch(tx.account, accQRaw))
+        }
       }
     }
   }
@@ -557,7 +573,7 @@ export default function AIChatPanel() {
         for (let idx = 0; idx < retryPlan.length; idx += 1) {
           const step = retryPlan[idx]
           if (idx > 0 && step.loadingLabel) setThinkingLabel(step.loadingLabel)
-          const result = runQueryLedger(transactions, step.args)
+          const result = runQueryLedger(transactions, step.args, knownAccounts)
           attempts.push({
             label: step.label,
             filters: formatQueryFilterSummary(step.args),
@@ -575,7 +591,7 @@ export default function AIChatPanel() {
           }
         }
 
-        const result = chosenResult || runQueryLedger(transactions, args)
+        const result = chosenResult || runQueryLedger(transactions, args, knownAccounts)
         const sumDisplay = (result.totalSumAbs ?? 0).toLocaleString('ko-KR')
 
         // 결과가 있으면 원장 UI를 즉시 필터링 (전체 매칭 ID — limit 샘플과 동일 집합)
@@ -771,7 +787,7 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, deleteLine, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter],
+    [transactions, updateTransactionInline, deleteLine, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
   )
 
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
