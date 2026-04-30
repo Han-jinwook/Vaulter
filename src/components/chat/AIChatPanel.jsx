@@ -97,6 +97,31 @@ function fuzzySourceMatch(fieldValue, queryValue) {
   return tokens.some((token) => fuzzyTextMatch(fieldValue, token))
 }
 
+/** 앱·전체 원장 통칭 — 소스 라벨 아님. 모델이 location에 넣으면 0건이 되므로 필터에서 제외 */
+function sanitizeQueryLedgerLocation(raw) {
+  const s = String(raw || '').trim()
+  if (!s) return { effectiveLocation: null, strippedMeta: false }
+  const n = normalizeSearchText(s)
+  const metaNorm = new Set(
+    [
+      '가계부',
+      '금고',
+      '원장',
+      '데이터 원장',
+      '데이터원장',
+      '전체',
+      '앱',
+      'vault',
+      'keeper',
+      'vaulter',
+    ].map((x) => normalizeSearchText(x)),
+  )
+  if (metaNorm.has(n)) {
+    return { effectiveLocation: null, strippedMeta: true, locationRaw: s }
+  }
+  return { effectiveLocation: s, strippedMeta: false }
+}
+
 function normalizeCategorySearchText(value) {
   return normalizeSearchText(String(value || '').replace(/비\b/g, ''))
 }
@@ -214,9 +239,11 @@ function runQueryLedger(transactions, args) {
   const shouldTreatCategoryAsMerchantKeyword =
     hasCategoryHint && !hasMerchantHint && !categoryIsKnown
 
-  if (location) {
+  const { effectiveLocation, strippedMeta: locationIgnoredAsMeta, locationRaw } = sanitizeQueryLedgerLocation(location)
+  if (effectiveLocation) {
     results = results.filter(
-      (tx) => fuzzySourceMatch(tx.location, location) || fuzzySourceMatch(tx.source, location),
+      (tx) =>
+        fuzzySourceMatch(tx.location, effectiveLocation) || fuzzySourceMatch(tx.source, effectiveLocation),
     )
   }
   if (startDate) results = results.filter((tx) => normalizeDate(tx.date) >= startDate)
@@ -287,7 +314,8 @@ function runQueryLedger(transactions, args) {
   const allMatchingIds = sorted.map((t) => String(t.id))
 
   const appliedFiltersEcho = {
-    location: location ?? null,
+    location: effectiveLocation ?? null,
+    ...(locationIgnoredAsMeta && locationRaw ? { locationOmittedWasMetaPhrase: locationRaw } : {}),
     startDate: startDate ?? null,
     endDate: endDate ?? null,
     category: category ?? null,
@@ -305,6 +333,7 @@ function runQueryLedger(transactions, args) {
     truncated: totalMatched > mapped.length,
     allMatchingIds,
     accountAmbiguous,
+    locationIgnoredAsMeta,
     ...(ambiguousAccounts.length > 0 ? { ambiguousAccounts } : {}),
     appliedFiltersEcho,
     transactions: mapped,
@@ -552,11 +581,12 @@ export default function AIChatPanel() {
         // 결과가 있으면 원장 UI를 즉시 필터링 (전체 매칭 ID — limit 샘플과 동일 집합)
         if (result.count > 0 && Array.isArray(result.allMatchingIds) && result.allMatchingIds.length > 0) {
           const ids = new Set(result.allMatchingIds)
+          const omitLoc = result.locationIgnoredAsMeta && result.appliedFiltersEcho?.locationOmittedWasMetaPhrase
           const parts = [
             chosenStep?.args.startDate && chosenStep?.args.endDate
               ? `${chosenStep.args.startDate} ~ ${chosenStep.args.endDate}`
               : null,
-            chosenStep?.args.location ? String(chosenStep.args.location) : null,
+            !omitLoc && chosenStep?.args.location ? String(chosenStep.args.location) : null,
             chosenStep?.args.account ? String(chosenStep.args.account) : null,
             chosenStep?.args.category || null,
             chosenStep?.args.merchant || null,
@@ -580,7 +610,10 @@ export default function AIChatPanel() {
         } else if (result.count === 0) {
           ledgerSummary = `조회 결과 0건입니다. 시도한 조건: ${attempts.map((a) => `${a.label}(${a.filters})`).join(' → ')}. (DB 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리: ${result._db.categories.join(', ')})`
         } else {
-          ledgerSummary = `총 ${result.count}건, 합계 ₩${sumDisplay}.${truncNote} 답변의 건수·합계는 이 summary와 반드시 일치해야 하며, appliedFiltersEcho의 account가 비었으면 유저에게 말한 결제수단·계정을 단정하지 마라.`
+          const metaLocNote = result.locationIgnoredAsMeta
+            ? ' 원장 전체 의미로 들어온 location(예: 가계부/원장 명칭)은 소스 필터에서 빼았으니, 답변에 "가계부 소스에만"이라고 거짓으로 한정하지 말 것.'
+            : ''
+          ledgerSummary = `총 ${result.count}건, 합계 ₩${sumDisplay}.${truncNote} 답변의 건수·합계는 이 summary와 반드시 일치해야 하며, appliedFiltersEcho의 account가 비었으면 유저에게 말한 결제수단·계정을 단정하지 마라.${metaLocNote}`
         }
 
         return {
