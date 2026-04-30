@@ -317,7 +317,6 @@ export default function AIChatPanel() {
   } = useVaultStore()
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
-  const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
   const setAiFilter = useUIStore((s) => s.setAiFilter)
   const setVizFilter = useUIStore((s) => s.setVizFilter)
   const clearVizFilter = useUIStore((s) => s.clearVizFilter)
@@ -332,6 +331,8 @@ export default function AIChatPanel() {
   const [ledgerSpotlightMsgId, setLedgerSpotlightMsgId] = useState(null)
   // OpenAI 대화 히스토리 (세션 내 유지, 미영속)
   const conversationRef = useRef([])
+  /** 이번 사용자 질문 턴에서 query_ledger 등으로 모은 원장 ID 스냅샷(턴 시작 시 null) */
+  const pendingLedgerBrowseRef = useRef(null)
   // 이전 메시지 수 추적
   const prevMsgCountRef = useRef(messages.length)
 
@@ -534,7 +535,12 @@ export default function AIChatPanel() {
             chosenStep?.args.category || null,
             chosenStep?.args.merchant || null,
           ].filter(Boolean)
-          setAiFilter({ label: parts.join(' · ') || 'AI 검색 결과', ids })
+          const label = parts.join(' · ') || 'AI 검색 결과'
+          setAiFilter({ label, ids })
+          pendingLedgerBrowseRef.current = {
+            label,
+            transactionIds: result.transactions.map((t) => String(t.id)),
+          }
         }
 
         return {
@@ -589,6 +595,10 @@ export default function AIChatPanel() {
             pool.filter((t) => t.category === topCategory).map((t) => t.id),
           )
           setAiFilter({ label: topCategory, ids })
+          pendingLedgerBrowseRef.current = {
+            label: topCategory,
+            transactionIds: pool.filter((t) => t.category === topCategory).map((t) => String(t.id)),
+          }
         }
 
         return {
@@ -699,6 +709,7 @@ export default function AIChatPanel() {
       // 1) 유저 메시지 UI 추가 + 히스토리에 기록
       addChatMessage({ role: 'user', type: 'text', text: userText })
       conversationRef.current.push({ role: 'user', content: userText })
+      pendingLedgerBrowseRef.current = null
 
       setIsThinking(true)
       setThinkingLabel('생각하는 중...')
@@ -772,11 +783,30 @@ export default function AIChatPanel() {
                   .filter((t) => t.category?.toLowerCase().includes(winnerCategory.toLowerCase()))
                   .map((t) => t.id),
               )
-              if (ids.size > 0) setAiFilter({ label: winnerCategory, ids })
+              if (ids.size > 0) {
+                setAiFilter({ label: winnerCategory, ids })
+                pendingLedgerBrowseRef.current = {
+                  label: winnerCategory,
+                  transactionIds: Array.from(ids, (id) => String(id)),
+                }
+              }
             }
             // 태그를 제거한 깔끔한 텍스트만 채팅에 표시
             const cleanText = data.text.replace(/\s*\[WINNER_CATEGORY:[^\]]+\]/g, '').trim()
-            addChatMessage({ role: 'ai', type: 'text', text: cleanText })
+            const browse = pendingLedgerBrowseRef.current
+            const ledgerBrowseSnapshot =
+              browse &&
+              Array.isArray(browse.transactionIds) &&
+              browse.transactionIds.length > 0 &&
+              browse.label
+                ? { label: browse.label, transactionIds: [...browse.transactionIds] }
+                : undefined
+            addChatMessage({
+              role: 'ai',
+              type: 'text',
+              text: cleanText,
+              ...(ledgerBrowseSnapshot ? { ledgerBrowseSnapshot } : {}),
+            })
             conversationRef.current.push({ role: 'assistant', content: data.text })
             break
           }
@@ -958,6 +988,8 @@ function ChatBubble({
   onAcknowledge,
   onLedgerResolve,
 }) {
+  const setAiFilter = useUIStore((s) => s.setAiFilter)
+  const restoreTrinityModeChat = useUIStore((s) => s.restoreTrinityMode)
   const [isCustomInputOpen, setIsCustomInputOpen] = useState(false)
   const [customCategory, setCustomCategory] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
@@ -1354,8 +1386,29 @@ function ChatBubble({
 
   return (
     <div className="flex items-end gap-1.5 max-w-[94%]">
-      <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2 rounded-2xl rounded-tl-none leading-relaxed')}>
+      <div className={`${aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2 rounded-2xl rounded-tl-none leading-relaxed')} flex flex-col items-stretch min-w-0 gap-1`}>
         <MessageWithActionLinks text={msg.text} className="text-on-surface" />
+        {msg.role === 'ai' &&
+          msg.type === 'text' &&
+          msg.ledgerBrowseSnapshot?.transactionIds?.length > 0 && (
+            <button
+              type="button"
+              className="self-end shrink-0 text-[10px] font-semibold text-primary hover:text-primary hover:underline tabular-nums"
+              onClick={() => {
+                const s = msg.ledgerBrowseSnapshot
+                if (!s?.transactionIds?.length) return
+                restoreTrinityModeChat()
+                setAiFilter({ label: s.label, ids: new Set(s.transactionIds) })
+                queueMicrotask(() =>
+                  document
+                    .getElementById('data-vault-ledger')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+                )
+              }}
+            >
+              ←원장 다시보기
+            </button>
+          )}
       </div>
       <TimeStamp time={msg.time} dateLabel="" />
     </div>

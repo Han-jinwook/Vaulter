@@ -55,6 +55,8 @@ export type ChatMessage = {
   accountOptions?: ConfirmOption[]
   subtitle?: string
   credit?: string
+  /** 턴 종료 시점 원장 필터(해당 말풍선에서만 「원장 다시보기」 제공) */
+  ledgerBrowseSnapshot?: { label: string; transactionIds: string[] }
 }
 
 type LedgerDecision = {
