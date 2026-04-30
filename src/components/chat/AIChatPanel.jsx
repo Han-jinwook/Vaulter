@@ -149,29 +149,7 @@ function buildQueryRetryPlan(rawArgs) {
     })
   }
 
-  const lastArgs = plan[plan.length - 1].args
-  const relaxedArgs = { ...lastArgs }
-  let relaxed = false
-  if (relaxedArgs.startDate || relaxedArgs.endDate) {
-    delete relaxedArgs.startDate
-    delete relaxedArgs.endDate
-    relaxed = true
-  }
-  if (relaxedArgs.location) {
-    delete relaxedArgs.location
-    relaxed = true
-  }
-  if (!relaxed && relaxedArgs.category) {
-    delete relaxedArgs.category
-    relaxed = true
-  }
-  if (relaxed) {
-    plan.push({
-      label: '기간/소스 완화 재검색',
-      args: relaxedArgs,
-      loadingLabel: '기간/소스 필터를 완화해서 다시 찾는 중...',
-    })
-  }
+  // 기간·소스를 자동으로 풀면 (예: 4월+계정 질문) 전체 기간으로 넓어져 집계가 틀어지므로 재시도에서 제외한다.
 
   const deduped = []
   const seen = new Set()
@@ -225,6 +203,9 @@ function runQueryLedger(transactions, args) {
     limit = 20,
   } = args
   let results = [...transactions]
+  let accountAmbiguous = false
+  /** @type {string[]} */
+  let ambiguousAccounts = []
 
   const hasCategoryHint = String(category || '').trim().length > 0
   const hasMerchantHint = String(merchant || '').trim().length > 0
@@ -250,7 +231,22 @@ function runQueryLedger(transactions, args) {
     results = results.filter((tx) => fuzzyCategoryMatch(tx.category, category))
   }
   if (account) {
-    results = results.filter((tx) => fuzzyTextMatch(tx.account, account))
+    const accQ = String(account || '').trim()
+    if (!accQ) {
+      /* skip */
+    } else {
+      const distinct = [...new Set(transactions.map((t) => String(t.account || '').trim()).filter(Boolean))]
+      const accHits = distinct.filter((a) => fuzzyTextMatch(a, accQ))
+      if (accHits.length >= 2) {
+        accountAmbiguous = true
+        ambiguousAccounts = [...accHits.slice(0, 20)].sort((a, b) => a.localeCompare(b, 'ko'))
+        results = []
+      } else if (accHits.length === 1) {
+        results = results.filter((tx) => fuzzyTextMatch(tx.account, accHits[0]))
+      } else {
+        results = results.filter((tx) => fuzzyTextMatch(tx.account, accQ))
+      }
+    }
   }
   if (merchant) {
     results = results.filter(
@@ -271,22 +267,46 @@ function runQueryLedger(transactions, args) {
     return normalizeDate(b.date).localeCompare(normalizeDate(a.date)) // date_desc
   })
 
-  const mapped = sorted
-    .slice(0, Math.min(limit, 100))
-    .map((tx) => ({
-      id: tx.id,
-      date: normalizeDate(tx.date),
-      name: tx.name || tx.merchant || '(이름 없음)',
-      amount: tx.amount,
-      category: tx.category || '미분류',
-      account: tx.account || '',
-      status: tx.status,
-    }))
+  const maxReturn = Math.min(Number(limit) || 20, 100)
+  const capped = sorted.slice(0, maxReturn)
+  const mapped = capped.map((tx) => ({
+    id: tx.id,
+    date: normalizeDate(tx.date),
+    name: tx.name || tx.merchant || '(이름 없음)',
+    amount: tx.amount,
+    category: tx.category || '미분류',
+    account: tx.account || '',
+    status: tx.status,
+  }))
+
+  const totalMatched = sorted.length
+  const totalSumSigned = sorted.reduce((s, t) => s + Number(t.amount), 0)
+  const totalSumAbs = Math.abs(totalSumSigned)
+
+  /** `transactions`는 응답 크기 제한용 샘플 — 집계·원장 필터는 전체 매칭 기준 */
+  const allMatchingIds = sorted.map((t) => String(t.id))
+
+  const appliedFiltersEcho = {
+    location: location ?? null,
+    startDate: startDate ?? null,
+    endDate: endDate ?? null,
+    category: category ?? null,
+    merchant: merchant ?? null,
+    account: account ?? null,
+    type: type ?? null,
+  }
 
   // GPT가 필터가 너무 좁은지 판단할 수 있도록 DB 전체 현황도 함께 반환
   const allDates = transactions.map((t) => normalizeDate(t.date)).filter(Boolean).sort()
   return {
-    count: mapped.length,
+    count: totalMatched,
+    totalSumAbs,
+    returnedCount: mapped.length,
+    truncated: totalMatched > mapped.length,
+    allMatchingIds,
+    accountAmbiguous,
+    ...(ambiguousAccounts.length > 0 ? { ambiguousAccounts } : {}),
+    appliedFiltersEcho,
     transactions: mapped,
     _db: {
       totalTransactions: transactions.length,
@@ -514,6 +534,11 @@ export default function AIChatPanel() {
             filters: formatQueryFilterSummary(step.args),
             count: result.count,
           })
+          if (result.accountAmbiguous) {
+            chosenResult = result
+            chosenStep = step
+            break
+          }
           if (result.count > 0 || idx === retryPlan.length - 1) {
             chosenResult = result
             chosenStep = step
@@ -522,16 +547,17 @@ export default function AIChatPanel() {
         }
 
         const result = chosenResult || runQueryLedger(transactions, args)
-        const sum = Math.abs(result.transactions.reduce((s, t) => s + t.amount, 0))
+        const sumDisplay = (result.totalSumAbs ?? 0).toLocaleString('ko-KR')
 
-        // 결과가 있으면 원장 UI를 즉시 필터링
-        if (result.count > 0) {
-          const ids = new Set(result.transactions.map((t) => t.id))
+        // 결과가 있으면 원장 UI를 즉시 필터링 (전체 매칭 ID — limit 샘플과 동일 집합)
+        if (result.count > 0 && Array.isArray(result.allMatchingIds) && result.allMatchingIds.length > 0) {
+          const ids = new Set(result.allMatchingIds)
           const parts = [
             chosenStep?.args.startDate && chosenStep?.args.endDate
               ? `${chosenStep.args.startDate} ~ ${chosenStep.args.endDate}`
               : null,
             chosenStep?.args.location ? String(chosenStep.args.location) : null,
+            chosenStep?.args.account ? String(chosenStep.args.account) : null,
             chosenStep?.args.category || null,
             chosenStep?.args.merchant || null,
           ].filter(Boolean)
@@ -539,17 +565,29 @@ export default function AIChatPanel() {
           setAiFilter({ label, ids })
           pendingLedgerBrowseRef.current = {
             label,
-            transactionIds: result.transactions.map((t) => String(t.id)),
+            transactionIds: [...result.allMatchingIds],
           }
+        }
+
+        const truncNote =
+          result.truncated && result.returnedCount != null
+            ? ` 응답 transactions는 상위 ${result.returnedCount}건 샘플이며, count·totalSumAbs는 전체 매칭 기준이다.`
+            : ''
+
+        let ledgerSummary
+        if (result.accountAmbiguous && result.ambiguousAccounts?.length) {
+          ledgerSummary = `계정 검색어가 등록된 여러 계정에 동시에 걸렸습니다: ${result.ambiguousAccounts.join(', ')}. 0건으로 처리 — 사용자에게 정확한 계정명(목록 중 하나)을 물어라.`
+        } else if (result.count === 0) {
+          ledgerSummary = `조회 결과 0건입니다. 시도한 조건: ${attempts.map((a) => `${a.label}(${a.filters})`).join(' → ')}. (DB 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리: ${result._db.categories.join(', ')})`
+        } else {
+          ledgerSummary = `총 ${result.count}건, 합계 ₩${sumDisplay}.${truncNote} 답변의 건수·합계는 이 summary와 반드시 일치해야 하며, appliedFiltersEcho의 account가 비었으면 유저에게 말한 결제수단·계정을 단정하지 마라.`
         }
 
         return {
           ...result,
           attempt_count: attempts.length,
           attempts,
-          summary: result.count === 0
-            ? `조회 결과 0건입니다. 시도한 조건: ${attempts.map((a) => `${a.label}(${a.filters})`).join(' → ')}. (DB 총 ${result._db.totalTransactions}건, 기간: ${result._db.dateRange}, 카테고리: ${result._db.categories.join(', ')})`
-            : `총 ${result.count}건, 합계 ₩${sum.toLocaleString()}`,
+          summary: ledgerSummary,
         }
       }
 
