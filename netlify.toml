@@ -2,6 +2,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Chat: OpenAI 2회 순차 호출 가능 — 기본 10초 한도 초과 시 502. 플랜에서 허용되는 최대(26s)까지 요청 (사이트 활성화는 Netlify 콘솔/플랜에 따름).
+[functions."chat-assistant"]
+  timeout = 26
+
 # 클라이언트가 /api/ 리다이렉트 대신 `/.netlify/functions/...` 를 쓰게 함 (src/lib/resolveApiUrl.js)
 [build.environment]
   VITE_NETLIFY = "1"

@@ -749,7 +749,71 @@ function trimHistory(messages) {
   return sanitizeToolCallHistory(sliced)
 }
 
-// ─── 핸들러 ───────────────────────────────────────────────────────────────────
+/** tool 응답 JSON이 라운드를 거칠 때마다 누적되면 페이로드·토큰이 폭증해 Netlify 초과→502 가능 */
+const HISTORY_MAX_LEDGER_IDS = 45
+const HISTORY_MAX_LEDGER_TX_SAMPLES = 12
+const HISTORY_MAX_DB_CATEGORIES = 80
+
+function deflateToolPayloadForHistory(parsed) {
+  if (!parsed || typeof parsed !== 'object') return parsed
+  const next = { ...parsed }
+
+  if (Array.isArray(parsed.ranking) && parsed.ranking.length > 20) {
+    next.ranking = parsed.ranking.slice(0, 20)
+    next._historyNote =
+      `${next._historyNote ? `${next._historyNote} · ` : ''}ranking은 상위 20개만 포함(전체 topN 결과는 클라 실행 요약 참고)`
+  }
+
+  const looksLedgerQuery =
+    Array.isArray(parsed.allMatchingIds) ||
+    (parsed.appliedFiltersEcho != null && typeof parsed.appliedFiltersEcho === 'object')
+
+  if (looksLedgerQuery) {
+    const idCount = Array.isArray(parsed.allMatchingIds) ? parsed.allMatchingIds.length : 0
+    if (idCount > HISTORY_MAX_LEDGER_IDS && Array.isArray(parsed.allMatchingIds)) {
+      next.allMatchingIds = [
+        ...parsed.allMatchingIds.slice(0, HISTORY_MAX_LEDGER_IDS),
+        `__OMITTED_ID_COUNT_TOTAL__:${idCount}`,
+      ]
+      next._historyNote = `${next._historyNote ? `${next._historyNote} · ` : ''}실제 매칭 id는 ${idCount}건(히스트리에는 길이·샘플만 유지)`
+    }
+    const txArr = parsed.transactions
+    if (Array.isArray(txArr) && txArr.length > HISTORY_MAX_LEDGER_TX_SAMPLES) {
+      next.transactions = txArr.slice(0, HISTORY_MAX_LEDGER_TX_SAMPLES)
+      next._historyTxSampleOf = `${HISTORY_MAX_LEDGER_TX_SAMPLES}/${txArr.length}`
+    }
+    if (
+      parsed._db &&
+      Array.isArray(parsed._db.categories) &&
+      parsed._db.categories.length > HISTORY_MAX_DB_CATEGORIES
+    ) {
+      next._db = {
+        ...parsed._db,
+        categories: parsed._db.categories.slice(0, HISTORY_MAX_DB_CATEGORIES),
+        categoriesOmittedHint: `(+상위 정보용 ${parsed._db.categories.length - HISTORY_MAX_DB_CATEGORIES}개 생략)`,
+      }
+    }
+    if (parsed.attempts?.length > 6) next.attempts = parsed.attempts.slice(-6)
+  }
+
+  return next
+}
+
+/** OpenAI 에 보내기 직전 — role=tool content(JSON)만 줄인 복본 */
+function deflateMessagesForOpenAI(messages) {
+  if (!Array.isArray(messages)) return messages
+  return messages.map((m) => {
+    if (!m || m.role !== 'tool' || typeof m.content !== 'string') return m
+    const parsed = parseJsonObjectStrict(m.content)
+    if (!parsed || typeof parsed !== 'object') return m
+    try {
+      return { ...m, content: JSON.stringify(deflateToolPayloadForHistory(parsed)) }
+    } catch {
+      return m
+    }
+  })
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: CORS_HEADERS, body: '' }
@@ -776,7 +840,21 @@ export const handler = async (event) => {
   }
 
   const trimmedMessages = trimHistory(messages)
+  const messagesForOpenAI = deflateMessagesForOpenAI(trimmedMessages)
   const tailMessage = trimmedMessages[trimmedMessages.length - 1]
+
+  const accRaw = Array.isArray(dbContext?.accounts)
+    ? dbContext.accounts.map((x) => String(x || '').trim()).filter(Boolean)
+    : []
+  const accDisplay =
+    accRaw.length === 0 ? '없음' : accRaw.length <= 80 ? accRaw.join(', ') : `${accRaw.slice(0, 80).join(', ')} …(총 ${accRaw.length}개)`
+
+  const catRaw = Array.isArray(dbContext?.categories)
+    ? dbContext.categories.map((x) => String(x || '').trim()).filter(Boolean)
+    : []
+  const catDisplay =
+    catRaw.length === 0 ? '없음' : catRaw.length <= 120 ? catRaw.join(', ') : `${catRaw.slice(0, 120).join(', ')} …(총 ${catRaw.length}개)`
+
   const lastUserMessage = [...trimmedMessages]
     .reverse()
     .find((m) => m && m.role === 'user' && typeof m.content === 'string')
@@ -787,9 +865,9 @@ export const handler = async (event) => {
     ? {
         role: 'system',
         content: `【현재 유저의 원장 데이터 현황】
-- 등록된 계정(결제수단) 목록: ${dbContext.accounts?.length ? dbContext.accounts.join(', ') : '없음'}
-- 등록된 카테고리 목록(기존 원장에 쌓인 **과거/혼재** 분류, 조회·필터용): ${dbContext.categories?.length ? dbContext.categories.join(', ') : '없음'}
-- **한 질문에 "기간 전체 몇 건이고 OO 계정은 몇 건?"이 같이 들어있으면** query를 **두 번**(같은 날짜 범위, 첫 번째는 account 생략 / 두 번째는 account=`위 목록의 정확한 한 줄`).
+- 등록된 계정(결제수단) 목록: ${accDisplay}
+- 등록된 카테고리 목록(기존 원장에 쌓인 **과거/혼재** 분류, 조회·필터용): ${catDisplay}
+- **한 질문에 "기간 전체 몇 건이고 OO 계정은 몇 건?"이 같이 들어있으면** query를 **두 번**(같은 날짜 범위, 첫 번째는 account 생략 / 두 번째는 account=\`위 목록의 정확한 한 줄\`).
 - 총 거래 건수: ${dbContext.totalTransactions ?? 0}건
 - 기간: ${dbContext.dateRange ?? '없음'}
 
@@ -855,7 +933,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
           { role: 'system', content: buildSystemPrompt() },
           ...(contextMessage ? [contextMessage] : []),
           ...(intentOverrideMessage ? [intentOverrideMessage] : []),
-          ...trimmedMessages,
+          ...messagesForOpenAI,
         ],
         tools: TOOLS,
         tool_choice: 'auto',
