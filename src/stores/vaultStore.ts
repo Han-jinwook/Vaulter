@@ -78,6 +78,31 @@ export type VaultTransaction = Transaction & {
 }
 
 type LedgerFilter = 'all' | 'review' | 'income' | 'expense'
+
+/** 원장 상단 — 연 전체 또는 연+월 기준 기간 (베이스 필터) */
+export type LedgerPeriodPreset =
+  | { kind: 'all' }
+  | { kind: 'year'; year: number }
+  | { kind: 'month'; year: number; month: number }
+
+function normalizeLedgerPeriodPreset(raw: unknown): LedgerPeriodPreset {
+  if (!raw || typeof raw !== 'object') return { kind: 'all' }
+  const o = raw as { kind?: unknown; year?: unknown; month?: unknown }
+  if (o.kind === 'year' && typeof o.year === 'number' && Number.isFinite(o.year)) {
+    return { kind: 'year', year: Math.floor(o.year) }
+  }
+  if (
+    o.kind === 'month' &&
+    typeof o.year === 'number' &&
+    typeof o.month === 'number' &&
+    Number.isFinite(o.year) &&
+    Number.isFinite(o.month)
+  ) {
+    const month = Math.min(12, Math.max(1, Math.floor(o.month)))
+    return { kind: 'month', year: Math.floor(o.year), month }
+  }
+  return { kind: 'all' }
+}
 type IngestBackgroundResult = {
   insertedCount: number
   insertedSourceRefs: string[]
@@ -115,6 +140,9 @@ export type VaultBackupSnapshot = {
   lastLedgerDecision: LedgerDecision | null
   ledgerContextTitle: string
   activeLedgerFilter: LedgerFilter
+  /** 구버전 스냅샷에는 없을 수 있음 */
+  ledgerPeriodPreset?: LedgerPeriodPreset
+  ledgerAccountFilter?: string | null
   reviewPinnedTxIds: string[]
   /** 황금자산(IndexedDB `assets`와 동기). 구버전 스냅샷에는 없을 수 있음 */
   goldenAssetLines?: AssetLine[]
@@ -139,12 +167,16 @@ type VaultState = {
   lastLedgerDecision: LedgerDecision | null
   ledgerContextTitle: string
   activeLedgerFilter: LedgerFilter
+  ledgerPeriodPreset: LedgerPeriodPreset
+  ledgerAccountFilter: string | null
   reviewPinnedTxIds: string[]
   hoveredTxId: string | null
   isDragging: boolean
   isProcessing: boolean
 
   setLedgerContextByFilter: (filter: LedgerFilter) => void
+  setLedgerPeriodPreset: (preset: LedgerPeriodPreset) => void
+  setLedgerAccountFilter: (account: string | null) => void
   setLedgerAiReviewContext: () => void
   setHoveredTx: (id: string | null) => void
   setDragging: (v: boolean) => void
@@ -757,6 +789,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
   activeLedgerFilter: 'all',
+  ledgerPeriodPreset: { kind: 'all' },
+  ledgerAccountFilter: null,
   reviewPinnedTxIds: [],
   hoveredTxId: null,
   isDragging: false,
@@ -765,8 +799,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   setLedgerContextByFilter: (filter) => {
     const titleMap: Record<LedgerFilter, string> = {
       all: '데이터 원장 (전체)',
-      income: '이번 달 수입 내역',
-      expense: '이번 달 지출 내역',
+      income: '수입 내역',
+      expense: '지출 내역',
       review: '미분류/검토 대기 내역',
     }
     set({
@@ -774,6 +808,17 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       ledgerContextTitle: titleMap[filter],
       reviewPinnedTxIds: filter === 'review' ? get().reviewPinnedTxIds : [],
     })
+  },
+
+  setLedgerPeriodPreset: (preset) => {
+    set({ ledgerPeriodPreset: normalizeLedgerPeriodPreset(preset) })
+    void flushLocalVaultSnapshotToKv().catch(() => {})
+  },
+
+  setLedgerAccountFilter: (account) => {
+    const next = account != null && String(account).trim() ? String(account).trim() : null
+    set({ ledgerAccountFilter: next })
+    void flushLocalVaultSnapshotToKv().catch(() => {})
   },
 
   setLedgerAiReviewContext: () => {
@@ -1343,6 +1388,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       lastLedgerDecision: state.lastLedgerDecision,
       ledgerContextTitle: state.ledgerContextTitle,
       activeLedgerFilter: state.activeLedgerFilter,
+      ledgerPeriodPreset: state.ledgerPeriodPreset,
+      ledgerAccountFilter: state.ledgerAccountFilter,
       reviewPinnedTxIds: state.reviewPinnedTxIds,
     }
   },
@@ -1370,6 +1417,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       lastLedgerDecision: snapshot?.lastLedgerDecision || null,
       ledgerContextTitle: snapshot?.ledgerContextTitle || '데이터 원장 (전체)',
       activeLedgerFilter: snapshot?.activeLedgerFilter || 'all',
+      ledgerPeriodPreset: normalizeLedgerPeriodPreset(snapshot?.ledgerPeriodPreset),
+      ledgerAccountFilter:
+        snapshot?.ledgerAccountFilter != null && String(snapshot.ledgerAccountFilter).trim()
+          ? String(snapshot.ledgerAccountFilter).trim()
+          : null,
       reviewPinnedTxIds: Array.isArray(snapshot?.reviewPinnedTxIds) ? snapshot.reviewPinnedTxIds : [],
       hoveredTxId: null,
       isDragging: false,

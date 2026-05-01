@@ -29,6 +29,8 @@ const EMPTY_SNAPSHOT = {
   lastLedgerDecision: null,
   ledgerContextTitle: '데이터 원장 (전체)',
   activeLedgerFilter: 'all',
+  ledgerPeriodPreset: { kind: 'all' },
+  ledgerAccountFilter: null,
   reviewPinnedTxIds: [],
   goldenAssetLines: [],
 }

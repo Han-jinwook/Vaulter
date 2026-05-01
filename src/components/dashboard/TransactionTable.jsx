@@ -22,6 +22,45 @@ function dateToTs(rawDate) {
   return new Date(y, m - 1, d).getTime()
 }
 
+/** 원장 날짜 `YYYY.MM.DD` → 연·월 */
+function parseTxYearMonth(rawDate) {
+  const m = String(rawDate).match(/^(\d{4})\.(\d{2})\./)
+  if (!m) return null
+  return { year: Number(m[1]), month: Number(m[2]) }
+}
+
+function txMatchesLedgerPeriod(rawDate, preset) {
+  if (preset.kind === 'all') return true
+  const cal = parseTxYearMonth(rawDate)
+  if (!cal) return false
+  if (preset.kind === 'year') return cal.year === preset.year
+  return cal.year === preset.year && cal.month === preset.month
+}
+
+function ledgerPresetToSelectValue(preset) {
+  if (preset.kind === 'all') return 'all'
+  if (preset.kind === 'year') return `year:${preset.year}`
+  return `month:${preset.year}-${String(preset.month).padStart(2, '0')}`
+}
+
+function selectValueToLedgerPreset(value) {
+  if (!value || value === 'all') return { kind: 'all' }
+  if (value.startsWith('year:')) {
+    const y = Number(value.slice(5))
+    return Number.isFinite(y) ? { kind: 'year', year: y } : { kind: 'all' }
+  }
+  if (value.startsWith('month:')) {
+    const match = value.match(/^month:(\d{4})-(\d{2})$/)
+    if (match) {
+      const year = Number(match[1])
+      const month = Number(match[2])
+      if (Number.isFinite(year) && Number.isFinite(month))
+        return { kind: 'month', year, month: Math.min(12, Math.max(1, month)) }
+    }
+  }
+  return { kind: 'all' }
+}
+
 function buildSourceLabel(tx) {
   const source = String(tx?.source || '').trim()
   const rawDetail = String(tx?.location || '').trim()
@@ -55,6 +94,11 @@ export default function TransactionTable() {
     ledgerContextTitle,
     activeLedgerFilter,
     setLedgerContextByFilter,
+    knownAccounts,
+    ledgerPeriodPreset,
+    ledgerAccountFilter,
+    setLedgerPeriodPreset,
+    setLedgerAccountFilter,
   } = useVaultStore()
 
   const confirmedAccountSuggestions = useMemo(() => {
@@ -72,20 +116,84 @@ export default function TransactionTable() {
   const [editingCell, setEditingCell] = useState(null)
   const [draftValue, setDraftValue] = useState('')
 
+  const ledgerAccountChoices = useMemo(() => {
+    const s = new Set()
+    for (const a of knownAccounts || []) {
+      const t = String(a || '').trim()
+      if (t) s.add(t)
+    }
+    for (const tx of transactions) {
+      const t = String(tx.account ?? '').trim()
+      if (t) s.add(t)
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [transactions, knownAccounts])
+
+  const periodDropdownModel = useMemo(() => {
+    const years = new Set()
+    const months = []
+    const seenYm = new Set()
+    for (const tx of transactions) {
+      const cal = parseTxYearMonth(tx.date)
+      if (!cal) continue
+      years.add(cal.year)
+      const key = `${cal.year}-${cal.month}`
+      if (!seenYm.has(key)) {
+        seenYm.add(key)
+        months.push({ year: cal.year, month: cal.month })
+      }
+    }
+    const sortedYears = [...years].sort((a, b) => b - a)
+    months.sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year
+      return b.month - a.month
+    })
+    return { sortedYears, months }
+  }, [transactions])
+
+  const ledgerFilterHint = useMemo(() => {
+    const parts = []
+    if (ledgerPeriodPreset.kind !== 'all') {
+      if (ledgerPeriodPreset.kind === 'year') parts.push(`${ledgerPeriodPreset.year}년`)
+      else parts.push(`${ledgerPeriodPreset.year}년 ${ledgerPeriodPreset.month}월`)
+    }
+    if (ledgerAccountFilter) parts.push(ledgerAccountFilter)
+    return parts.length > 0 ? parts.join(' · ') : null
+  }, [ledgerPeriodPreset, ledgerAccountFilter])
+
+  const selectCn =
+    'min-w-[6.5rem] max-w-[10.5rem] px-2.5 py-1.5 rounded-full text-xs font-bold border border-surface-container bg-surface-container-low text-on-surface cursor-pointer hover:bg-surface-container outline-none focus-visible:ring-2 focus-visible:ring-primary/25 truncate'
+
   const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
 
   const filteredTransactions = useMemo(() => {
-    // AI 필터가 활성화된 경우 ID 기반으로 우선 적용
+    const applyPeriodAndAccount = (rows) => {
+      let r = rows.filter((tx) => txMatchesLedgerPeriod(tx.date, ledgerPeriodPreset))
+      if (ledgerAccountFilter && ledgerAccountFilter.trim()) {
+        const af = ledgerAccountFilter.trim()
+        r = r.filter((tx) => String(tx.account ?? '').trim() === af)
+      }
+      return r
+    }
+
     if (aiFilter?.ids) {
-      return transactions.filter((tx) => aiFilter.ids.has(tx.id))
+      return applyPeriodAndAccount(transactions.filter((tx) => aiFilter.ids.has(tx.id)))
     }
+    const pool = applyPeriodAndAccount(transactions)
     if (activeLedgerFilter === 'review') {
-      return transactions.filter((tx) => tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id))
+      return pool.filter((tx) => tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id))
     }
-    if (activeLedgerFilter === 'income') return transactions.filter((tx) => tx.amount > 0)
-    if (activeLedgerFilter === 'expense') return transactions.filter((tx) => tx.amount < 0)
-    return transactions
-  }, [transactions, activeLedgerFilter, reviewPinnedTxIds, aiFilter])
+    if (activeLedgerFilter === 'income') return pool.filter((tx) => tx.amount > 0)
+    if (activeLedgerFilter === 'expense') return pool.filter((tx) => tx.amount < 0)
+    return pool
+  }, [
+    transactions,
+    activeLedgerFilter,
+    reviewPinnedTxIds,
+    aiFilter,
+    ledgerPeriodPreset,
+    ledgerAccountFilter,
+  ])
 
   const aiMatchCount = useMemo(() => {
     if (!aiFilter?.ids) return 0
@@ -179,9 +287,30 @@ export default function TransactionTable() {
             </h3>
             <p className="mt-1 text-[11px] text-on-surface-variant">
               원장 목록은 카드 안쪽에서만 스크롤됩니다.
+              {ledgerFilterHint ? (
+                <span className="block mt-0.5 text-primary/90 font-semibold">베이스: {ledgerFilterHint}</span>
+              ) : null}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center justify-end">
+            <select
+              aria-label="원장 기간"
+              className={selectCn}
+              value={ledgerPresetToSelectValue(ledgerPeriodPreset)}
+              onChange={(e) => setLedgerPeriodPreset(selectValueToLedgerPreset(e.target.value))}
+            >
+              <option value="all">전체 기간</option>
+              {periodDropdownModel.sortedYears.map((y) => (
+                <option key={`y-${y}`} value={`year:${y}`}>
+                  {y}년 전체
+                </option>
+              ))}
+              {periodDropdownModel.months.map(({ year, month }) => (
+                <option key={`m-${year}-${month}`} value={`month:${year}-${String(month).padStart(2, '0')}`}>
+                  {year}년 {month}월
+                </option>
+              ))}
+            </select>
             <FilterChip
               label="전체"
               active={activeLedgerFilter === 'all'}
@@ -192,6 +321,21 @@ export default function TransactionTable() {
               active={activeLedgerFilter === 'review'}
               onClick={() => setLedgerContextByFilter('review')}
             />
+            <select
+              aria-label="계정으로 필터"
+              className={`${selectCn} max-w-[11rem]`}
+              value={ledgerAccountFilter ?? ''}
+              onChange={(e) =>
+                setLedgerAccountFilter(e.target.value === '' ? null : e.target.value)
+              }
+            >
+              <option value="">전체 계정</option>
+              {ledgerAccountChoices.map((acc) => (
+                <option key={acc} value={acc}>
+                  {acc}
+                </option>
+              ))}
+            </select>
             <FilterChip
               label="수입"
               active={activeLedgerFilter === 'income'}
