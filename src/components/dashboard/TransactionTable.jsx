@@ -379,36 +379,6 @@ export default function TransactionTable() {
             <h3 key={ledgerContextTitle} className="font-bold text-base animate-fade-in">
               {ledgerContextTitle}
             </h3>
-            <p className="mt-1 text-[11px] text-on-surface-variant leading-snug">
-              <span className="inline align-middle">
-                원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
-                <button
-                  type="button"
-                  title={
-                    activeLedgerFilter === 'review'
-                      ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
-                      : '검토 대기 거래만 보기'
-                  }
-                  aria-pressed={activeLedgerFilter === 'review'}
-                  onClick={() =>
-                    setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
-                  }
-                  className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
-                    activeLedgerFilter === 'review'
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
-                  }`}
-                >
-                  <span aria-hidden>🚨</span>
-                  검토 필요 ({reviewCount})
-                </button>
-              </span>
-              {ledgerFilterHint ? (
-                <span className="block mt-0.5 text-primary/90 font-semibold">
-                  수동 필터: {ledgerFilterHint}
-                </span>
-              ) : null}
-            </p>
           </div>
           <div className="flex flex-wrap items-center w-full gap-y-2 gap-x-2">
             <div className="flex flex-wrap gap-2 items-center min-w-0 flex-1">
@@ -528,6 +498,36 @@ export default function TransactionTable() {
               </button>
             </div>
           </div>
+          <p className="w-full mt-1 text-[11px] text-on-surface-variant leading-snug">
+            <span className="inline align-middle">
+              원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
+              <button
+                type="button"
+                title={
+                  activeLedgerFilter === 'review'
+                    ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
+                    : '검토 대기 거래만 보기'
+                }
+                aria-pressed={activeLedgerFilter === 'review'}
+                onClick={() =>
+                  setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
+                }
+                className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+                  activeLedgerFilter === 'review'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
+                }`}
+              >
+                <span aria-hidden>🚨</span>
+                검토 필요 ({reviewCount})
+              </button>
+            </span>
+            {ledgerFilterHint ? (
+              <span className="block mt-0.5 text-primary/90 font-semibold">
+                수동 필터: {ledgerFilterHint}
+              </span>
+            ) : null}
+          </p>
         </div>
       </div>
 
