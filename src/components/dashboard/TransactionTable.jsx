@@ -253,6 +253,11 @@ export default function TransactionTable() {
     return transactions.reduce((count, tx) => (aiFilterIdSet.has(String(tx.id)) ? count + 1 : count), 0)
   }, [transactions, aiFilterIdSet])
 
+  const filteredNetAmount = useMemo(
+    () => filteredTransactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0),
+    [filteredTransactions],
+  )
+
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
       const dateDiff = dateToTs(b.date) - dateToTs(a.date)
@@ -498,36 +503,41 @@ export default function TransactionTable() {
               </button>
             </div>
           </div>
-          <p className="w-full mt-1 text-[11px] text-on-surface-variant leading-snug">
-            <span className="inline align-middle">
-              원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
-              <button
-                type="button"
-                title={
-                  activeLedgerFilter === 'review'
-                    ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
-                    : '검토 대기 거래만 보기'
-                }
-                aria-pressed={activeLedgerFilter === 'review'}
-                onClick={() =>
-                  setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
-                }
-                className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
-                  activeLedgerFilter === 'review'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
-                }`}
-              >
-                <span aria-hidden>🚨</span>
-                검토 필요 ({reviewCount})
-              </button>
-            </span>
-            {ledgerFilterHint ? (
-              <span className="block mt-0.5 text-primary/90 font-semibold">
-                수동 필터: {ledgerFilterHint}
+          <div className="w-full mt-1 flex items-start justify-between gap-3">
+            <p className="text-[11px] text-on-surface-variant leading-snug min-w-0">
+              <span className="inline align-middle">
+                원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
+                <button
+                  type="button"
+                  title={
+                    activeLedgerFilter === 'review'
+                      ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
+                      : '검토 대기 거래만 보기'
+                  }
+                  aria-pressed={activeLedgerFilter === 'review'}
+                  onClick={() =>
+                    setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
+                  }
+                  className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+                    activeLedgerFilter === 'review'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
+                  }`}
+                >
+                  <span aria-hidden>🚨</span>
+                  검토 필요 ({reviewCount})
+                </button>
               </span>
-            ) : null}
-          </p>
+              {ledgerFilterHint ? (
+                <span className="block mt-0.5 text-primary/90 font-semibold">
+                  수동 필터: {ledgerFilterHint}
+                </span>
+              ) : null}
+            </p>
+            <span className="shrink-0 text-[11px] font-bold tabular-nums text-on-surface-variant whitespace-nowrap">
+              잔액: {filteredNetAmount.toLocaleString('ko-KR')}원
+            </span>
+          </div>
         </div>
       </div>
 
