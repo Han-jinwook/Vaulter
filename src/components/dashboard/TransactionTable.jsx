@@ -170,12 +170,12 @@ export default function TransactionTable() {
   const ledgerFilterHint = useMemo(() => {
     const parts = []
     if (ledgerPeriodPreset.kind !== 'all') {
-      if (ledgerPeriodPreset.kind === 'year') parts.push(`${ledgerPeriodPreset.year}년`)
-      else parts.push(`${ledgerPeriodPreset.year}년 ${ledgerPeriodPreset.month}월`)
+      if (ledgerPeriodPreset.kind === 'year') parts.push(`기간 ${ledgerPeriodPreset.year}년`)
+      else parts.push(`기간 ${ledgerPeriodPreset.year}년 ${ledgerPeriodPreset.month}월`)
     }
-    if (ledgerAccountFilter) parts.push(ledgerAccountFilter)
+    if (ledgerAccountFilter?.trim()) parts.push(`계정 ${ledgerAccountFilter.trim()}`)
     if (ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED) parts.push('항목 미지정')
-    else if (ledgerCategoryFilter?.trim()) parts.push(ledgerCategoryFilter.trim())
+    else if (ledgerCategoryFilter?.trim()) parts.push(`항목 ${ledgerCategoryFilter.trim()}`)
     return parts.length > 0 ? parts.join(' · ') : null
   }, [ledgerPeriodPreset, ledgerAccountFilter, ledgerCategoryFilter])
 
@@ -313,7 +313,9 @@ export default function TransactionTable() {
             <p className="mt-1 text-[11px] text-on-surface-variant">
               원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
               {ledgerFilterHint ? (
-                <span className="block mt-0.5 text-primary/90 font-semibold">베이스: {ledgerFilterHint}</span>
+                <span className="block mt-0.5 text-primary/90 font-semibold">
+                  수동 필터: {ledgerFilterHint}
+                </span>
               ) : null}
             </p>
           </div>
