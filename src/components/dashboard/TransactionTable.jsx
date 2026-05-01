@@ -357,8 +357,23 @@ export default function TransactionTable() {
             <h3 key={ledgerContextTitle} className="font-bold text-base animate-fade-in">
               {ledgerContextTitle}
             </h3>
-            <p className="mt-1 text-[11px] text-on-surface-variant">
-              원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
+            <p className="mt-1 text-[11px] text-on-surface-variant leading-snug">
+              <span className="inline align-middle">
+                원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
+                <button
+                  type="button"
+                  title="검토 대기 거래만 보기"
+                  onClick={() => setLedgerContextByFilter('review')}
+                  className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+                    activeLedgerFilter === 'review'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
+                  }`}
+                >
+                  <span aria-hidden>🚨</span>
+                  검토 필요 ({reviewCount})
+                </button>
+              </span>
               {ledgerFilterHint ? (
                 <span className="block mt-0.5 text-primary/90 font-semibold">
                   수동 필터: {ledgerFilterHint}
@@ -390,11 +405,6 @@ export default function TransactionTable() {
               title="선택한 기간·계정 범위 안에서 수입·지출을 구분하지 않고 모두 표시합니다. 기간을 넓히려면 왼쪽에서 「전체 기간」을 고르세요."
               active={activeLedgerFilter === 'all'}
               onClick={() => setLedgerContextByFilter('all')}
-            />
-            <FilterChip
-              label={`🚨 검토 필요 (${reviewCount})`}
-              active={activeLedgerFilter === 'review'}
-              onClick={() => setLedgerContextByFilter('review')}
             />
             <select
               aria-label="계정으로 필터"

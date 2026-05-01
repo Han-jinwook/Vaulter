@@ -63,7 +63,7 @@ const inputPlaceholder = {
 
 /**
  * 비제어 textarea. placeholder/disabled 는 조합(IME) 중엔 DOM을 갱신하지 않음.
- * Enter 전송 · Shift/Ctrl/Meta+Enter 줄바꿈.
+ * Enter 전송 · Ctrl/Meta/Shift+Enter 줄바꿈(UI 안내는 Ctrl+Enter만 표기 가능).
  * onSend 는 부모에서 useRef+useCallback 으로 참조를 고정해 주면(지기/자산 패널에서 처리) memo가 효과가 있다.
  */
 function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholder, onSend }) {
@@ -126,7 +126,7 @@ function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholde
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
-      // Shift/Ctrl/Meta+Enter → 줄바꿈 (일반적인 채팅 패턴). 단독 Enter → 전송.
+      // Ctrl/Meta/Shift+Enter → 줄바꿈. 단독 Enter → 전송.
       if (e.shiftKey || e.ctrlKey || e.metaKey) return
       e.preventDefault()
       submit()

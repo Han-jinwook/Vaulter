@@ -1123,7 +1123,7 @@ export default function AIChatPanel() {
         variant="keeper"
         disabled={isThinking}
         thinkingLabel={thinkingLabel}
-        idlePlaceholder="금고 AI비서에게 무엇이든 지시하세요. (줄바꿈: Shift+Enter 또는 Ctrl+Enter)"
+        idlePlaceholder="금고 AI비서에게 무엇이든 지시하세요. (줄바꿈: Ctrl+Enter)"
         onSend={stableOnSend}
       />
     </aside>
