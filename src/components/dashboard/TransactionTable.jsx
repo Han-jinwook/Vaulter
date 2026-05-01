@@ -531,7 +531,7 @@ export default function TransactionTable() {
         </div>
       </div>
 
-      <div className="ledger-scrollbar-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+      <div className="ledger-scrollbar-scroll flex-1 min-h-0 overflow-y-auto px-3 pb-3">
         {groupedTransactions.length === 0 ? (
           <p className="py-10 px-2 text-center text-sm text-on-surface-variant leading-relaxed">
             조건에 맞는 거래가 없습니다.
@@ -541,8 +541,8 @@ export default function TransactionTable() {
           </p>
         ) : (
           groupedTransactions.map((group) => (
-          <div key={group.date} className="pt-3">
-            <div className="text-gray-500 text-xs font-medium pb-1.5">{fmtDateGroup(group.date)}</div>
+          <div key={group.date} className="pt-2">
+            <div className="text-gray-500 text-xs font-medium pb-1">{fmtDateGroup(group.date)}</div>
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
               {group.items.map((tx) => {
                 const isHovered = hoveredTxId === tx.id
@@ -551,13 +551,13 @@ export default function TransactionTable() {
                     key={tx.id}
                     onMouseEnter={() => setHoveredTx(tx.id)}
                     onMouseLeave={() => setHoveredTx(null)}
-                    className={`px-3 md:px-4 py-3 bg-transparent transition-colors ${
+                    className={`px-2 md:px-2.5 py-1.5 bg-transparent transition-colors ${
                       isHovered ? 'bg-primary/[0.05]' : 'hover:bg-surface-container-low/50'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-1.5">
                       <label
-                        className="shrink-0 inline-flex items-center cursor-pointer"
+                        className="-ml-0.5 shrink-0 inline-flex items-center cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                       >
@@ -569,16 +569,11 @@ export default function TransactionTable() {
                           aria-label={`${tx.name || '거래'} 선택`}
                         />
                       </label>
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: tx.iconBg }}
-                      >
-                        <span className="material-symbols-outlined text-base" style={{ color: tx.iconColor }}>
-                          {tx.icon}
-                        </span>
+                      <div className="w-[70px] shrink-0 text-[10px] text-gray-500 truncate">
+                        {buildSourceLabel(tx)}
                       </div>
 
-                      <div className="min-w-[150px]">
+                      <div className="min-w-[128px]">
                         {isEditing(tx.id, 'name') ? (
                           <InlineInput
                             value={draftValue}
@@ -594,10 +589,9 @@ export default function TransactionTable() {
                             {tx.name}
                           </p>
                         )}
-                        <p className="text-[10px] text-gray-500 mt-0.5">{buildSourceLabel(tx)}</p>
                       </div>
 
-                      <div className="flex-1 min-w-[120px] px-1.5">
+                      <div className="flex-[0.68] min-w-[80px] max-w-[170px] px-0.5">
                         {isEditing(tx.id, 'userMemo') ? (
                           <InlineInput
                             value={draftValue}
@@ -615,7 +609,7 @@ export default function TransactionTable() {
                         )}
                       </div>
 
-                      <div className="ml-auto flex items-center gap-1.5 pr-1">
+                      <div className="ml-auto flex items-center gap-1 pr-0.5">
                         {isEditing(tx.id, 'account') ? (
                           <AccountDropdown
                             value={draftValue}
@@ -627,7 +621,7 @@ export default function TransactionTable() {
                         ) : (
                           <span
                             onDoubleClick={() => beginEdit(tx.id, 'account', tx.account || '')}
-                            className="px-2 py-1 bg-surface-container-low text-on-surface-variant text-[11px] rounded-full font-semibold cursor-text"
+                            className="px-1.5 py-0.5 bg-surface-container-low text-on-surface-variant text-[11px] rounded-full font-semibold cursor-text"
                           >
                             {tx.account || '계정 미지정'}
                           </span>
@@ -642,14 +636,14 @@ export default function TransactionTable() {
                         ) : tx.category ? (
                           <span
                             onDoubleClick={() => beginEdit(tx.id, 'category', tx.category)}
-                            className="px-2.5 py-1 bg-primary/10 text-primary text-xs rounded-full font-extrabold cursor-text"
+                            className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full font-extrabold cursor-text"
                           >
                             {tx.category}
                           </span>
                         ) : (
                           <span
                             onDoubleClick={() => beginEdit(tx.id, 'category', '')}
-                            className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[11px] rounded-full font-bold cursor-text"
+                            className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[11px] rounded-full font-bold cursor-text"
                           >
                             분류 대기
                           </span>
@@ -662,7 +656,7 @@ export default function TransactionTable() {
                               e.stopPropagation()
                               requestLedgerChatScrollToTx(tx.id)
                             }}
-                            className="px-2 py-1 bg-red-100 text-red-700 text-[10px] rounded-full font-bold hover:bg-red-200/90 transition-colors"
+                            className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded-full font-bold hover:bg-red-200/90 transition-colors"
                           >
                             🚨 검토 필요
                           </button>
