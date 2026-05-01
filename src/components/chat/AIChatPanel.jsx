@@ -18,6 +18,24 @@ function normalizeDate(d) {
   return d
 }
 
+function dedupeLedgerDeleteItems(items) {
+  const seen = new Set()
+  const out = []
+  for (const it of items) {
+    const id = String(it?.txId ?? '').trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(it)
+  }
+  return out
+}
+
+function fmtLedgerLineAmount(n) {
+  const num = Number(n) || 0
+  const abs = Math.abs(num).toLocaleString('ko-KR')
+  return num > 0 ? `+₩${abs}` : `-₩${abs}`
+}
+
 function normalizeSearchText(value) {
   return String(value || '')
     .normalize('NFKC')
@@ -396,6 +414,7 @@ export default function AIChatPanel() {
     updateTransactionInline,
     deleteLine,
     addLedgerEntry,
+    resolveLedgerDeleteConfirmMessage,
   } = useVaultStore()
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
@@ -415,6 +434,8 @@ export default function AIChatPanel() {
   const conversationRef = useRef([])
   /** 이번 사용자 질문 턴에서 query_ledger 등으로 모은 원장 ID 스냅샷(턴 시작 시 null) */
   const pendingLedgerBrowseRef = useRef(null)
+  /** delete_ledger → 즉시 삭제하지 않고 확인 칩용으로 모음 */
+  const pendingLedgerDeletesRef = useRef([])
   // 이전 메시지 수 추적
   const prevMsgCountRef = useRef(messages.length)
 
@@ -767,17 +788,24 @@ export default function AIChatPanel() {
         if (!txId) return { success: false, error: 'txId가 필요합니다.' }
         const target = transactions.find((t) => t.id === txId)
         if (!target) return { success: false, error: `ID ${txId}인 거래를 찾을 수 없습니다.` }
-        await deleteLine(txId)
+        pendingLedgerDeletesRef.current.push({
+          txId,
+          date: normalizeDate(target.date),
+          name: target.name || target.merchant || '(이름 없음)',
+          amount: target.amount,
+          category: target.category || '미분류',
+        })
         return {
           success: true,
+          user_confirmation_pending: true,
           txId,
-          deleted: {
+          preview: {
             date: normalizeDate(target.date),
             name: target.name || target.merchant || '(이름 없음)',
             amount: target.amount,
             category: target.category || '미분류',
-            account: target.account || '',
           },
+          note: '실제 삭제는 채팅에 표시된 확인 영역에서 **예**를 눌러야 적용된다. 자연어 답변에서는 "삭제했다"고 하지 말고 확인 칩을 누르라고 안내하라. 최종 삭제 건수는 예 클릭 후 사용자에게 보이는 건수와 반드시 같아야 한다.',
         }
       }
 
@@ -828,7 +856,36 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, deleteLine, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
+    [transactions, updateTransactionInline, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
+  )
+
+  const handleLedgerDeleteDecision = useCallback(
+    async (msg, accepted) => {
+      const items = dedupeLedgerDeleteItems(msg.ledgerDeleteConfirm?.items ?? [])
+      const n = items.length
+      if (accepted) {
+        for (const it of items) {
+          await deleteLine(it.txId)
+        }
+        addChatMessage({
+          role: 'ai',
+          type: 'text',
+          text: `요청하신 대로 총 ${n}건을 원장에서 삭제했습니다.`,
+        })
+        conversationRef.current.push({ role: 'user', content: '[삭제 확인] 예' })
+        conversationRef.current.push({ role: 'assistant', content: `삭제 완료: ${n}건 처리했습니다.` })
+      } else {
+        addChatMessage({
+          role: 'ai',
+          type: 'text',
+          text: '삭제를 취소했습니다.',
+        })
+        conversationRef.current.push({ role: 'user', content: '[삭제 확인] 아니오' })
+        conversationRef.current.push({ role: 'assistant', content: '삭제를 취소했습니다.' })
+      }
+      resolveLedgerDeleteConfirmMessage(msg.id)
+    },
+    [deleteLine, addChatMessage, resolveLedgerDeleteConfirmMessage],
   )
 
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
@@ -838,6 +895,7 @@ export default function AIChatPanel() {
       addChatMessage({ role: 'user', type: 'text', text: userText })
       conversationRef.current.push({ role: 'user', content: userText })
       pendingLedgerBrowseRef.current = null
+      pendingLedgerDeletesRef.current = []
 
       setIsThinking(true)
       setThinkingLabel('생각하는 중...')
@@ -883,7 +941,7 @@ export default function AIChatPanel() {
 
               if (toolName === 'query_ledger') setThinkingLabel('금고를 뒤져보는 중...')
               else if (toolName === 'update_ledger') setThinkingLabel('원장을 수정하는 중...')
-              else if (toolName === 'delete_ledger') setThinkingLabel('원장에서 삭제하는 중...')
+              else if (toolName === 'delete_ledger') setThinkingLabel('삭제 확인 준비 중...')
               else if (toolName === 'add_ledger_entry') setThinkingLabel('가계부에 기록하는 중...')
               else if (toolName === 'render_visualization') setThinkingLabel('시각화를 여는 중...')
 
@@ -893,6 +951,16 @@ export default function AIChatPanel() {
                 role: 'tool',
                 tool_call_id: call.id,
                 content: JSON.stringify(toolResult),
+              })
+            }
+            if (pendingLedgerDeletesRef.current.length > 0) {
+              const items = dedupeLedgerDeleteItems(pendingLedgerDeletesRef.current)
+              pendingLedgerDeletesRef.current = []
+              addChatMessage({
+                role: 'ai',
+                type: 'ledger_delete_confirm',
+                text: `아래 ${items.length}건을 원장에서 삭제할까요? 예를 누르기 전까지는 삭제되지 않습니다.`,
+                ledgerDeleteConfirm: { items },
               })
             }
             // 결과 보내고 다시 GPT 호출 (루프 継続)
@@ -1028,6 +1096,7 @@ export default function AIChatPanel() {
                 onCompleteReview={completeTransactionReview}
                 onAcknowledge={acknowledgeAlert}
                 onLedgerResolve={resolveLedgerReview}
+                onLedgerDeleteDecision={handleLedgerDeleteDecision}
               />
             </div>
           )
@@ -1054,7 +1123,7 @@ export default function AIChatPanel() {
         variant="keeper"
         disabled={isThinking}
         thinkingLabel={thinkingLabel}
-        idlePlaceholder="금고 AI비서에게 무엇이든 지시하세요."
+        idlePlaceholder="금고 AI비서에게 무엇이든 지시하세요. (줄바꿈: Shift+Enter 또는 Ctrl+Enter)"
         onSend={stableOnSend}
       />
     </aside>
@@ -1105,6 +1174,78 @@ function aiSpotlightCn(spotlight, className = '') {
   return [className.trim(), spotlight ? 'ledger-msg-spotlight-bubble' : ''].filter(Boolean).join(' ')
 }
 
+function LedgerDeleteConfirmBubble({ msg, spotlight, onDecision }) {
+  const [busy, setBusy] = useState(false)
+  const items = Array.isArray(msg.ledgerDeleteConfirm?.items) ? msg.ledgerDeleteConfirm.items : []
+  const resolved = Boolean(msg.resolved)
+
+  return (
+    <div className="flex flex-col gap-1 max-w-[94%]">
+      <div className="flex items-end gap-1.5">
+        <div
+          className={aiSpotlightCn(
+            spotlight,
+            'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed border border-red-500/25',
+          )}
+        >
+          <p className="font-semibold text-sm whitespace-pre-wrap">{msg.text}</p>
+          <ul className="mt-2 max-h-44 overflow-y-auto text-[11px] space-y-1 text-on-surface-variant border-t border-surface-container pt-2">
+            {items.map((it, idx) => (
+              <li key={it.txId} className="tabular-nums">
+                <span className="text-outline">{idx + 1}.</span> {it.date} · {it.name} ·{' '}
+                <span className="font-semibold text-on-surface">{fmtLedgerLineAmount(it.amount)}</span> · {it.category}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <TimeStamp time={msg.time} dateLabel="" />
+      </div>
+      {!resolved && (
+        <div className="flex flex-wrap gap-2 mt-1 ml-1">
+          <button
+            type="button"
+            disabled={busy || !onDecision}
+            onClick={async () => {
+              if (!onDecision) return
+              setBusy(true)
+              try {
+                await onDecision(msg, true)
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-full hover:bg-red-700 disabled:opacity-50 transition-colors"
+          >
+            예, 삭제
+          </button>
+          <button
+            type="button"
+            disabled={busy || !onDecision}
+            onClick={async () => {
+              if (!onDecision) return
+              setBusy(true)
+              try {
+                await onDecision(msg, false)
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-3 py-1.5 bg-surface-container text-on-surface-variant text-xs font-bold rounded-full border border-surface-container hover:bg-surface-container-high disabled:opacity-50 transition-colors"
+          >
+            아니오
+          </button>
+        </div>
+      )}
+      {resolved ? (
+        <div className="ml-1 mt-1 flex items-center gap-1 text-[11px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-sm text-green-600">check_circle</span>
+          응답했습니다
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function ChatBubble({
   msg,
   spotlight,
@@ -1115,6 +1256,7 @@ function ChatBubble({
   onCompleteReview,
   onAcknowledge,
   onLedgerResolve,
+  onLedgerDeleteDecision,
 }) {
   const setAiFilter = useUIStore((s) => s.setAiFilter)
   const restoreTrinityModeChat = useUIStore((s) => s.restoreTrinityMode)
@@ -1501,11 +1643,15 @@ function ChatBubble({
     )
   }
 
+  if (msg.type === 'ledger_delete_confirm') {
+    return <LedgerDeleteConfirmBubble msg={msg} spotlight={spotlight} onDecision={onLedgerDeleteDecision} />
+  }
+
   if (msg.role === 'user') {
     return (
       <div className="flex items-end justify-end gap-1.5 ml-auto max-w-[94%]">
         <TimeStamp time={msg.time} />
-        <div className="bg-primary text-white px-3.5 py-2 rounded-2xl rounded-tr-none shadow-md shadow-primary/20 leading-relaxed">
+        <div className="bg-primary text-white px-3.5 py-2 rounded-2xl rounded-tr-none shadow-md shadow-primary/20 leading-relaxed whitespace-pre-wrap break-words">
           {msg.text}
         </div>
       </div>

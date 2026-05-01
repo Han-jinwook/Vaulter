@@ -32,7 +32,15 @@ function todayDate() {
 let _id = 100
 
 type ChatRole = 'ai' | 'user'
-type ChatType = 'text' | 'confirm' | 'account_confirm' | 'processing' | 'result' | 'alert' | 'ledger_review'
+type ChatType =
+  | 'text'
+  | 'confirm'
+  | 'account_confirm'
+  | 'processing'
+  | 'result'
+  | 'alert'
+  | 'ledger_review'
+  | 'ledger_delete_confirm'
 
 type ConfirmOption = {
   label: string
@@ -57,6 +65,10 @@ export type ChatMessage = {
   credit?: string
   /** 턴 종료 시점 원장 필터(해당 말풍선에서만 「원장 다시보기」 제공) */
   ledgerBrowseSnapshot?: { label: string; transactionIds: string[] }
+  /** delete_ledger 스테이징 후 예·아니오 칩 */
+  ledgerDeleteConfirm?: {
+    items: { txId: string; date: string; name: string; amount: number; category: string }[]
+  }
 }
 
 type LedgerDecision = {
@@ -243,6 +255,8 @@ type VaultState = {
   addAssetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   addBudgetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   addVaultChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  /** 원장 삭제 확인 칩 처리 후 버튼 숨김 */
+  resolveLedgerDeleteConfirmMessage: (messageId: number) => void
   addSecretVaultDocument: (doc: Omit<SecretVaultDocument, 'id'> & { id?: string }) => SecretVaultDocument
   exportBackupSnapshot: () => VaultBackupSnapshot
   restoreFromBackupSnapshot: (snapshot: VaultBackupSnapshot) => void
@@ -1368,6 +1382,14 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           createdAt: new Date().toISOString(),
         } as ChatMessage,
       ],
+    }))
+  },
+
+  resolveLedgerDeleteConfirmMessage: (messageId) => {
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId && m.type === 'ledger_delete_confirm' ? { ...m, resolved: true } : m,
+      ),
     }))
   },
 

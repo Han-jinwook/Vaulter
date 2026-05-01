@@ -4,7 +4,7 @@ const variants = {
   budget: {
     wrap: 'p-3 pt-2 border-t border-slate-600/20 bg-[#0a0c12]/92 [contain:layout] isolate',
     inner:
-      'flex items-center bg-[#0c1018] rounded-2xl px-3 py-1 border border-slate-600/30 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)] focus-within:border-sky-500/45',
+      'flex items-end bg-[#0c1018] rounded-2xl px-3 py-1 border border-slate-600/30 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)] focus-within:border-sky-500/45',
     icon: 'pie_chart',
     iconClass: "material-symbols-outlined text-sky-400/80 text-[16px] mr-2 shrink-0",
     input:
@@ -14,7 +14,7 @@ const variants = {
   coach: {
     wrap: 'p-3 pt-2 border-t border-emerald-500/12 bg-[#0a1010]/90 [contain:layout] isolate',
     inner:
-      'flex items-center bg-[#0a0f0e] rounded-2xl px-3 py-1 border border-emerald-500/25 shadow-[inset_0_1px_0_rgba(16,185,129,0.08)] focus-within:border-emerald-400/50',
+      'flex items-end bg-[#0a0f0e] rounded-2xl px-3 py-1 border border-emerald-500/25 shadow-[inset_0_1px_0_rgba(16,185,129,0.08)] focus-within:border-emerald-400/50',
     icon: 'fitness_center',
     iconClass: "material-symbols-outlined text-emerald-400/85 text-[16px] mr-2 shrink-0",
     input:
@@ -24,7 +24,7 @@ const variants = {
   asset: {
     wrap: 'p-3 pt-2 border-t border-[#FFD700]/10 bg-[#101010]/90 [contain:layout] isolate',
     inner:
-      'flex items-center bg-[#0a0a0a] rounded-2xl px-3 py-1 border border-[#FFD700]/25 shadow-[inset_0_1px_0_rgba(255,215,0,0.06)] focus-within:border-[#FFD700]/50',
+      'flex items-end bg-[#0a0a0a] rounded-2xl px-3 py-1 border border-[#FFD700]/25 shadow-[inset_0_1px_0_rgba(255,215,0,0.06)] focus-within:border-[#FFD700]/50',
     icon: 'savings',
     iconClass: "material-symbols-outlined text-[#B8860B]/70 text-[16px] mr-2 shrink-0",
     input:
@@ -34,7 +34,7 @@ const variants = {
   keeper: {
     wrap: 'p-3 pt-2 [contain:layout] isolate',
     inner:
-      'flex items-center bg-[#0f172a] rounded-2xl px-3 py-1 border border-[#FFD700]/30 shadow-[0_0_12px_rgba(255,215,0,0.08)] focus-within:border-[#FFD700]/60 focus-within:shadow-[0_0_20px_rgba(255,215,0,0.18)]',
+      'flex items-end bg-[#0f172a] rounded-2xl px-3 py-1 border border-[#FFD700]/30 shadow-[0_0_12px_rgba(255,215,0,0.08)] focus-within:border-[#FFD700]/60 focus-within:shadow-[0_0_20px_rgba(255,215,0,0.18)]',
     icon: 'lock',
     iconClass: "material-symbols-outlined text-[#FFD700]/50 text-[16px] mr-2 shrink-0",
     input:
@@ -44,7 +44,7 @@ const variants = {
   vault: {
     wrap: 'p-3 pt-2 border-t border-slate-700/30 bg-slate-950/95 [contain:layout] isolate',
     inner:
-      'flex items-center bg-slate-900 rounded-2xl px-3 py-1 border border-slate-700/50 shadow-[inset_0_1px_0_rgba(51,65,85,0.2)] focus-within:border-amber-700/50',
+      'flex items-end bg-slate-900 rounded-2xl px-3 py-1 border border-slate-700/50 shadow-[inset_0_1px_0_rgba(51,65,85,0.2)] focus-within:border-amber-700/50',
     icon: 'shield_lock',
     iconClass: "material-symbols-outlined text-slate-500 text-[16px] mr-2 shrink-0",
     input:
@@ -62,7 +62,8 @@ const inputPlaceholder = {
 }
 
 /**
- * 비제어 input. placeholder/disabled 는 조합(IME) 중엔 DOM을 갱신하지 않음.
+ * 비제어 textarea. placeholder/disabled 는 조합(IME) 중엔 DOM을 갱신하지 않음.
+ * Enter 전송 · Shift/Ctrl/Meta+Enter 줄바꿈.
  * onSend 는 부모에서 useRef+useCallback 으로 참조를 고정해 주면(지기/자산 패널에서 처리) memo가 효과가 있다.
  */
 function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholder, onSend }) {
@@ -116,18 +117,19 @@ function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholde
   const submit = useCallback(() => {
     const el = inputRef.current
     if (!el || el.disabled) return
-    const t = el.value.trim()
-    if (!t) return
-    onSend(t)
+    const raw = el.value
+    if (!String(raw).trim()) return
+    onSend(String(raw).replace(/\r\n/g, '\n').trimEnd())
     el.value = ''
   }, [onSend])
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-        e.preventDefault()
-        submit()
-      }
+      if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+      // Shift/Ctrl/Meta+Enter → 줄바꿈 (일반적인 채팅 패턴). 단독 Enter → 전송.
+      if (e.shiftKey || e.ctrlKey || e.metaKey) return
+      e.preventDefault()
+      submit()
     },
     [submit],
   )
@@ -142,17 +144,18 @@ function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholde
         >
           {v.icon}
         </span>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
           name="chat-composer"
+          rows={2}
           defaultValue=""
           onKeyDown={handleKeyDown}
           onCompositionStart={onCompositionStart}
           onCompositionEnd={onCompositionEnd}
           spellCheck={false}
           autoComplete="off"
-          className={`${v.input} ${inputPlaceholder[vKey]}`}
+          aria-multiline="true"
+          className={`${v.input} ${inputPlaceholder[vKey]} min-h-[2.75rem] max-h-[7.5rem] resize-y leading-snug`}
         />
         <button
           type="button"
