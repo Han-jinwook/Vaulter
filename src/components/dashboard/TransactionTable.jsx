@@ -94,7 +94,6 @@ export default function TransactionTable() {
     ledgerContextTitle,
     activeLedgerFilter,
     setLedgerContextByFilter,
-    knownAccounts,
     ledgerPeriodPreset,
     ledgerAccountFilter,
     ledgerCategoryFilter,
@@ -121,17 +120,22 @@ export default function TransactionTable() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
 
   const ledgerAccountChoices = useMemo(() => {
+    /** 필터 드롭다운은 실제 원장 행에 붙어 있는 계정만 — knownAccounts 오래된 값이 목록을 오염시키지 않음 */
     const s = new Set()
-    for (const a of knownAccounts || []) {
-      const t = String(a || '').trim()
-      if (t) s.add(t)
-    }
     for (const tx of transactions) {
       const t = String(tx.account ?? '').trim()
       if (t) s.add(t)
     }
     return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [transactions, knownAccounts])
+  }, [transactions])
+
+  /** 거래에서 사라진 계정으로 필터가 고정돼 있으면 해제 */
+  useEffect(() => {
+    const af = ledgerAccountFilter != null ? String(ledgerAccountFilter).trim() : ''
+    if (!af) return
+    const exists = transactions.some((tx) => String(tx.account ?? '').trim() === af)
+    if (!exists) setLedgerAccountFilter(null)
+  }, [transactions, ledgerAccountFilter, setLedgerAccountFilter])
 
   const ledgerCategoryChoices = useMemo(() => {
     const s = new Set()
