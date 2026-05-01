@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useVaultStore } from '../../stores/vaultStore'
+import { LEDGER_CATEGORY_FILTER_UNASSIGNED, useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
 
 const weekdaysShort = ['일', '월', '화', '수', '목', '금', '토']
@@ -97,8 +97,10 @@ export default function TransactionTable() {
     knownAccounts,
     ledgerPeriodPreset,
     ledgerAccountFilter,
+    ledgerCategoryFilter,
     setLedgerPeriodPreset,
     setLedgerAccountFilter,
+    setLedgerCategoryFilter,
   } = useVaultStore()
 
   const confirmedAccountSuggestions = useMemo(() => {
@@ -129,6 +131,20 @@ export default function TransactionTable() {
     return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
   }, [transactions, knownAccounts])
 
+  const ledgerCategoryChoices = useMemo(() => {
+    const s = new Set()
+    for (const tx of transactions) {
+      const t = String(tx.category ?? '').trim()
+      if (t) s.add(t)
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [transactions])
+
+  const hasUncategorizedLedgerRows = useMemo(
+    () => transactions.some((tx) => !String(tx.category ?? '').trim()),
+    [transactions],
+  )
+
   const periodDropdownModel = useMemo(() => {
     const years = new Set()
     const months = []
@@ -158,8 +174,10 @@ export default function TransactionTable() {
       else parts.push(`${ledgerPeriodPreset.year}년 ${ledgerPeriodPreset.month}월`)
     }
     if (ledgerAccountFilter) parts.push(ledgerAccountFilter)
+    if (ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED) parts.push('항목 미지정')
+    else if (ledgerCategoryFilter?.trim()) parts.push(ledgerCategoryFilter.trim())
     return parts.length > 0 ? parts.join(' · ') : null
-  }, [ledgerPeriodPreset, ledgerAccountFilter])
+  }, [ledgerPeriodPreset, ledgerAccountFilter, ledgerCategoryFilter])
 
   const selectCn =
     'min-w-[6.5rem] max-w-[10.5rem] px-2.5 py-1.5 rounded-full text-xs font-bold border border-surface-container bg-surface-container-low text-on-surface cursor-pointer hover:bg-surface-container outline-none focus-visible:ring-2 focus-visible:ring-primary/25 truncate'
@@ -172,6 +190,12 @@ export default function TransactionTable() {
       if (ledgerAccountFilter && ledgerAccountFilter.trim()) {
         const af = ledgerAccountFilter.trim()
         r = r.filter((tx) => String(tx.account ?? '').trim() === af)
+      }
+      if (ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED) {
+        r = r.filter((tx) => !String(tx.category ?? '').trim())
+      } else if (ledgerCategoryFilter?.trim()) {
+        const cf = ledgerCategoryFilter.trim()
+        r = r.filter((tx) => String(tx.category ?? '').trim() === cf)
       }
       return r
     }
@@ -193,6 +217,7 @@ export default function TransactionTable() {
     aiFilter,
     ledgerPeriodPreset,
     ledgerAccountFilter,
+    ledgerCategoryFilter,
   ])
 
   const aiMatchCount = useMemo(() => {
@@ -334,6 +359,31 @@ export default function TransactionTable() {
               {ledgerAccountChoices.map((acc) => (
                 <option key={acc} value={acc}>
                   {acc}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="항목으로 필터"
+              className={`${selectCn} max-w-[11rem]`}
+              value={
+                ledgerCategoryFilter == null
+                  ? ''
+                  : ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED
+                    ? LEDGER_CATEGORY_FILTER_UNASSIGNED
+                    : ledgerCategoryFilter
+              }
+              onChange={(e) => {
+                const v = e.target.value
+                setLedgerCategoryFilter(v === '' ? null : v)
+              }}
+            >
+              <option value="">전체 항목</option>
+              {hasUncategorizedLedgerRows ? (
+                <option value={LEDGER_CATEGORY_FILTER_UNASSIGNED}>항목 미지정</option>
+              ) : null}
+              {ledgerCategoryChoices.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
                 </option>
               ))}
             </select>

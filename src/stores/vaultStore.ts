@@ -103,6 +103,10 @@ function normalizeLedgerPeriodPreset(raw: unknown): LedgerPeriodPreset {
   }
   return { kind: 'all' }
 }
+
+/** 원장 항목(카테고리) 필터: 분류가 비어 있는 거래만 볼 때 사용하는 내부 값 */
+export const LEDGER_CATEGORY_FILTER_UNASSIGNED = '__ledger_cat_unassigned__'
+
 type IngestBackgroundResult = {
   insertedCount: number
   insertedSourceRefs: string[]
@@ -143,6 +147,7 @@ export type VaultBackupSnapshot = {
   /** 구버전 스냅샷에는 없을 수 있음 */
   ledgerPeriodPreset?: LedgerPeriodPreset
   ledgerAccountFilter?: string | null
+  ledgerCategoryFilter?: string | null
   reviewPinnedTxIds: string[]
   /** 황금자산(IndexedDB `assets`와 동기). 구버전 스냅샷에는 없을 수 있음 */
   goldenAssetLines?: AssetLine[]
@@ -169,6 +174,7 @@ type VaultState = {
   activeLedgerFilter: LedgerFilter
   ledgerPeriodPreset: LedgerPeriodPreset
   ledgerAccountFilter: string | null
+  ledgerCategoryFilter: string | null
   reviewPinnedTxIds: string[]
   hoveredTxId: string | null
   isDragging: boolean
@@ -177,6 +183,7 @@ type VaultState = {
   setLedgerContextByFilter: (filter: LedgerFilter) => void
   setLedgerPeriodPreset: (preset: LedgerPeriodPreset) => void
   setLedgerAccountFilter: (account: string | null) => void
+  setLedgerCategoryFilter: (category: string | null) => void
   setLedgerAiReviewContext: () => void
   setHoveredTx: (id: string | null) => void
   setDragging: (v: boolean) => void
@@ -791,6 +798,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   activeLedgerFilter: 'all',
   ledgerPeriodPreset: { kind: 'all' },
   ledgerAccountFilter: null,
+  ledgerCategoryFilter: null,
   reviewPinnedTxIds: [],
   hoveredTxId: null,
   isDragging: false,
@@ -818,6 +826,14 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   setLedgerAccountFilter: (account) => {
     const next = account != null && String(account).trim() ? String(account).trim() : null
     set({ ledgerAccountFilter: next })
+    void flushLocalVaultSnapshotToKv().catch(() => {})
+  },
+
+  setLedgerCategoryFilter: (category) => {
+    let next: string | null = null
+    if (category === LEDGER_CATEGORY_FILTER_UNASSIGNED) next = LEDGER_CATEGORY_FILTER_UNASSIGNED
+    else if (category != null && String(category).trim()) next = String(category).trim()
+    set({ ledgerCategoryFilter: next })
     void flushLocalVaultSnapshotToKv().catch(() => {})
   },
 
@@ -1390,6 +1406,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       activeLedgerFilter: state.activeLedgerFilter,
       ledgerPeriodPreset: state.ledgerPeriodPreset,
       ledgerAccountFilter: state.ledgerAccountFilter,
+      ledgerCategoryFilter: state.ledgerCategoryFilter,
       reviewPinnedTxIds: state.reviewPinnedTxIds,
     }
   },
@@ -1422,6 +1439,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         snapshot?.ledgerAccountFilter != null && String(snapshot.ledgerAccountFilter).trim()
           ? String(snapshot.ledgerAccountFilter).trim()
           : null,
+      ledgerCategoryFilter: (() => {
+        const raw = snapshot?.ledgerCategoryFilter
+        if (raw === LEDGER_CATEGORY_FILTER_UNASSIGNED) return LEDGER_CATEGORY_FILTER_UNASSIGNED
+        return raw != null && String(raw).trim() ? String(raw).trim() : null
+      })(),
       reviewPinnedTxIds: Array.isArray(snapshot?.reviewPinnedTxIds) ? snapshot.reviewPinnedTxIds : [],
       hoveredTxId: null,
       isDragging: false,

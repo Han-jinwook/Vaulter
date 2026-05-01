@@ -31,6 +31,7 @@ const EMPTY_SNAPSHOT = {
   activeLedgerFilter: 'all',
   ledgerPeriodPreset: { kind: 'all' },
   ledgerAccountFilter: null,
+  ledgerCategoryFilter: null,
   reviewPinnedTxIds: [],
   goldenAssetLines: [],
 }

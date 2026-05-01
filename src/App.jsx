@@ -177,6 +177,7 @@ function AppShell() {
               activeLedgerFilter: 'all',
               ledgerPeriodPreset: { kind: 'all' },
               ledgerAccountFilter: null,
+              ledgerCategoryFilter: null,
               reviewPinnedTxIds: [],
               goldenAssetLines: [],
             })
