@@ -11,10 +11,10 @@ function fmtAmount(n) {
   return n > 0 ? `+₩${abs}` : `-₩${abs}`
 }
 
-function fmtDateGroup(rawDate) {
+function fmtDateCompact(rawDate) {
   const [year, month, day] = String(rawDate).split('.').map(Number)
   const d = new Date(year, month - 1, day)
-  return `${String(year).slice(2)}년 ${month}월 ${day}일(${weekdaysShort[d.getDay()]})`
+  return `${String(year).slice(2)}/${month}/${day}(${weekdaysShort[d.getDay()]})`
 }
 
 function dateToTs(rawDate) {
@@ -542,9 +542,8 @@ export default function TransactionTable() {
         ) : (
           groupedTransactions.map((group) => (
           <div key={group.date} className="pt-2">
-            <div className="text-gray-500 text-xs font-medium pb-1">{fmtDateGroup(group.date)}</div>
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
-              {group.items.map((tx) => {
+              {group.items.map((tx, idx) => {
                 const isHovered = hoveredTxId === tx.id
                 return (
                   <div
@@ -556,6 +555,9 @@ export default function TransactionTable() {
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
+                      <div className="w-[74px] shrink-0 text-[11px] text-gray-500 tabular-nums">
+                        {idx === 0 ? fmtDateCompact(group.date) : '\u00A0'}
+                      </div>
                       <label
                         className="-ml-0.5 shrink-0 inline-flex items-center cursor-pointer"
                         onClick={(e) => e.stopPropagation()}
