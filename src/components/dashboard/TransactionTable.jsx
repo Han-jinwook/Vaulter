@@ -382,8 +382,15 @@ export default function TransactionTable() {
                 원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
                 <button
                   type="button"
-                  title="검토 대기 거래만 보기"
-                  onClick={() => setLedgerContextByFilter('review')}
+                  title={
+                    activeLedgerFilter === 'review'
+                      ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
+                      : '검토 대기 거래만 보기'
+                  }
+                  aria-pressed={activeLedgerFilter === 'review'}
+                  onClick={() =>
+                    setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
+                  }
                   className={`align-middle ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
                     activeLedgerFilter === 'review'
                       ? 'bg-primary text-white border-primary'
