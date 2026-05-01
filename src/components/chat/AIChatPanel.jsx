@@ -6,6 +6,7 @@ import { useUIStore } from '../../stores/uiStore'
 import { isConsumptiveLedgerExpense } from '../../lib/ledgerCategoryPolicy'
 import { resolveApiUrl } from '../../lib/resolveApiUrl'
 import { CHAT_PANEL_ASIDE_LAYOUT } from './chatPanelAsideLayout'
+import { normalizeLedgerAccountLabel } from '../../lib/ledgerAccountNormalize'
 
 // 날짜 문자열 → YYYY-MM-DD 정규화 (다양한 포맷 대응)
 function normalizeDate(d) {
@@ -227,10 +228,6 @@ function findChatMessageForLedgerTx(messages, txId) {
     if (m) return m
   }
   return messages.find((x) => x.txId != null && String(x.txId) === id) ?? null
-}
-
-function normalizeLedgerAccountLabel(s) {
-  return String(s || '').trim().normalize('NFKC')
 }
 
 /** GPT가 사용자 원문 전체를 account에 넣는 경우 — 원장 계정명 매칭에 부적합 */

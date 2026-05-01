@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { LEDGER_CATEGORY_FILTER_UNASSIGNED, useVaultStore } from '../../stores/vaultStore'
 import { useUIStore } from '../../stores/uiStore'
+import { normalizeLedgerAccountLabel } from '../../lib/ledgerAccountNormalize'
 
 const weekdaysShort = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -119,21 +120,35 @@ export default function TransactionTable() {
   const [draftValue, setDraftValue] = useState('')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
 
-  const ledgerAccountChoices = useMemo(() => {
-    /** 필터 드롭다운은 실제 원장 행에 붙어 있는 계정만 — knownAccounts 오래된 값이 목록을 오염시키지 않음 */
-    const s = new Set()
+  /** 정규화 키당 대표 라벨 하나 — 동일 계정의 유니코드 변형이 필터에서 따로 노출·미매칭되지 않게 함 */
+  const ledgerAccountCanonByNorm = useMemo(() => {
+    const m = new Map()
     for (const tx of transactions) {
-      const t = String(tx.account ?? '').trim()
-      if (t) s.add(t)
+      const raw = String(tx.account ?? '').trim()
+      if (!raw) continue
+      const norm = normalizeLedgerAccountLabel(raw)
+      if (!m.has(norm)) m.set(norm, raw)
     }
-    return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
+    return m
   }, [transactions])
+
+  const ledgerAccountChoices = useMemo(
+    () => [...ledgerAccountCanonByNorm.values()].sort((a, b) => a.localeCompare(b, 'ko')),
+    [ledgerAccountCanonByNorm],
+  )
+
+  const accountSelectValue =
+    ledgerAccountFilter?.trim()
+      ? ledgerAccountCanonByNorm.get(normalizeLedgerAccountLabel(ledgerAccountFilter)) ??
+        ledgerAccountFilter.trim()
+      : ''
 
   /** 거래에서 사라진 계정으로 필터가 고정돼 있으면 해제 */
   useEffect(() => {
     const af = ledgerAccountFilter != null ? String(ledgerAccountFilter).trim() : ''
     if (!af) return
-    const exists = transactions.some((tx) => String(tx.account ?? '').trim() === af)
+    const afNorm = normalizeLedgerAccountLabel(af)
+    const exists = transactions.some((tx) => normalizeLedgerAccountLabel(tx.account) === afNorm)
     if (!exists) setLedgerAccountFilter(null)
   }, [transactions, ledgerAccountFilter, setLedgerAccountFilter])
 
@@ -190,12 +205,17 @@ export default function TransactionTable() {
 
   const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
 
+  const aiFilterIdSet = useMemo(() => {
+    if (!aiFilter?.ids) return null
+    return new Set([...aiFilter.ids].map((id) => String(id)))
+  }, [aiFilter])
+
   const filteredTransactions = useMemo(() => {
     const applyPeriodAndAccount = (rows) => {
       let r = rows.filter((tx) => txMatchesLedgerPeriod(tx.date, ledgerPeriodPreset))
       if (ledgerAccountFilter && ledgerAccountFilter.trim()) {
-        const af = ledgerAccountFilter.trim()
-        r = r.filter((tx) => String(tx.account ?? '').trim() === af)
+        const afNorm = normalizeLedgerAccountLabel(ledgerAccountFilter)
+        r = r.filter((tx) => normalizeLedgerAccountLabel(tx.account) === afNorm)
       }
       if (ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED) {
         r = r.filter((tx) => !String(tx.category ?? '').trim())
@@ -206,8 +226,8 @@ export default function TransactionTable() {
       return r
     }
 
-    if (aiFilter?.ids) {
-      return applyPeriodAndAccount(transactions.filter((tx) => aiFilter.ids.has(tx.id)))
+    if (aiFilterIdSet) {
+      return applyPeriodAndAccount(transactions.filter((tx) => aiFilterIdSet.has(String(tx.id))))
     }
     const pool = applyPeriodAndAccount(transactions)
     if (activeLedgerFilter === 'review') {
@@ -220,16 +240,16 @@ export default function TransactionTable() {
     transactions,
     activeLedgerFilter,
     reviewPinnedTxIds,
-    aiFilter,
+    aiFilterIdSet,
     ledgerPeriodPreset,
     ledgerAccountFilter,
     ledgerCategoryFilter,
   ])
 
   const aiMatchCount = useMemo(() => {
-    if (!aiFilter?.ids) return 0
-    return transactions.reduce((count, tx) => (aiFilter.ids.has(tx.id) ? count + 1 : count), 0)
-  }, [transactions, aiFilter])
+    if (!aiFilterIdSet) return 0
+    return transactions.reduce((count, tx) => (aiFilterIdSet.has(String(tx.id)) ? count + 1 : count), 0)
+  }, [transactions, aiFilterIdSet])
 
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
@@ -410,10 +430,12 @@ export default function TransactionTable() {
               <select
                 aria-label="계정으로 필터"
                 className={`${selectCn} max-w-[11rem]`}
-                value={ledgerAccountFilter ?? ''}
-                onChange={(e) =>
-                  setLedgerAccountFilter(e.target.value === '' ? null : e.target.value)
-                }
+                value={accountSelectValue}
+                onChange={(e) => {
+                  const raw = e.target.value === '' ? null : e.target.value
+                  setLedgerAccountFilter(raw)
+                  if (raw && activeLedgerFilter === 'review') setLedgerContextByFilter('all')
+                }}
               >
                 <option value="">전체 계정</option>
                 {ledgerAccountChoices.map((acc) => (
@@ -501,7 +523,15 @@ export default function TransactionTable() {
       </div>
 
       <div className="ledger-scrollbar-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-        {groupedTransactions.map((group) => (
+        {groupedTransactions.length === 0 ? (
+          <p className="py-10 px-2 text-center text-sm text-on-surface-variant leading-relaxed">
+            조건에 맞는 거래가 없습니다.
+            <span className="block mt-1 text-[11px]">
+              「미분류/검토 대기」 보기에서는 검토 필요 건만 나옵니다. 계정별 전체 내역은 「유형 전체」 칩을 누른 뒤 다시 확인해 보세요.
+            </span>
+          </p>
+        ) : (
+          groupedTransactions.map((group) => (
           <div key={group.date} className="pt-3">
             <div className="text-gray-500 text-xs font-medium pb-1.5">{fmtDateGroup(group.date)}</div>
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
@@ -653,7 +683,8 @@ export default function TransactionTable() {
               })}
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )
