@@ -101,6 +101,7 @@ export default function TransactionTable() {
     setLedgerPeriodPreset,
     setLedgerAccountFilter,
     setLedgerCategoryFilter,
+    deleteLine,
   } = useVaultStore()
 
   const confirmedAccountSuggestions = useMemo(() => {
@@ -117,6 +118,7 @@ export default function TransactionTable() {
   const requestLedgerChatScrollToTx = useUIStore((s) => s.requestLedgerChatScrollToTx)
   const [editingCell, setEditingCell] = useState(null)
   const [draftValue, setDraftValue] = useState('')
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
 
   const ledgerAccountChoices = useMemo(() => {
     const s = new Set()
@@ -244,6 +246,47 @@ export default function TransactionTable() {
       return groups
     }, [])
   }, [sortedTransactions])
+
+  useEffect(() => {
+    const visible = new Set(sortedTransactions.map((t) => t.id))
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => visible.has(id)))
+      if (next.size !== prev.size) return next
+      for (const id of prev) {
+        if (!next.has(id)) return next
+      }
+      return prev
+    })
+  }, [sortedTransactions])
+
+  const toggleTxSelected = (txId) => {
+    const id = String(txId)
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAllInCurrentView = () => {
+    setSelectedIds(new Set(sortedTransactions.map((t) => t.id)))
+  }
+
+  const clearRowSelection = () => setSelectedIds(new Set())
+
+  const deleteSelectedRows = async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const ok = window.confirm(
+      `선택한 ${ids.length}건을 원장에서 삭제할까요? 되돌리기 어려울 수 있습니다.`,
+    )
+    if (!ok) return
+    for (const id of ids) {
+      await deleteLine(id)
+    }
+    setSelectedIds(new Set())
+  }
 
   const beginEdit = (txId, field, value) => {
     setEditingCell({ txId, field })
@@ -401,6 +444,35 @@ export default function TransactionTable() {
             />
           </div>
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 mt-2 pt-2 border-t border-surface-container">
+          <span className="text-[11px] text-on-surface-variant tabular-nums min-w-[4.5rem] text-right">
+            {selectedIds.size > 0 ? `${selectedIds.size}건 선택` : '\u00a0'}
+          </span>
+          <button
+            type="button"
+            onClick={selectAllInCurrentView}
+            disabled={sortedTransactions.length === 0}
+            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
+          >
+            현재 목록 전체 선택
+          </button>
+          <button
+            type="button"
+            onClick={clearRowSelection}
+            disabled={selectedIds.size === 0}
+            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
+          >
+            선택 해제
+          </button>
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={selectedIds.size === 0}
+            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+          >
+            삭제
+          </button>
+        </div>
       </div>
 
       <div className="ledger-scrollbar-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4">
@@ -420,6 +492,19 @@ export default function TransactionTable() {
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
+                      <label
+                        className="shrink-0 inline-flex items-center cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(tx.id)}
+                          onChange={() => toggleTxSelected(tx.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30"
+                          aria-label={`${tx.name || '거래'} 선택`}
+                        />
+                      </label>
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                         style={{ backgroundColor: tx.iconBg }}
