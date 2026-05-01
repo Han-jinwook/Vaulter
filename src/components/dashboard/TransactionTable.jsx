@@ -381,117 +381,121 @@ export default function TransactionTable() {
               ) : null}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 items-center justify-end">
-            <select
-              aria-label="원장 기간"
-              className={selectCn}
-              value={ledgerPresetToSelectValue(ledgerPeriodPreset)}
-              onChange={(e) => setLedgerPeriodPreset(selectValueToLedgerPreset(e.target.value))}
+          <div className="flex flex-wrap items-center w-full gap-y-2 gap-x-2">
+            <div className="flex flex-wrap gap-2 items-center min-w-0 flex-1">
+              <select
+                aria-label="원장 기간"
+                className={selectCn}
+                value={ledgerPresetToSelectValue(ledgerPeriodPreset)}
+                onChange={(e) => setLedgerPeriodPreset(selectValueToLedgerPreset(e.target.value))}
+              >
+                <option value="all">전체 기간</option>
+                {periodDropdownModel.sortedYears.map((y) => (
+                  <option key={`y-${y}`} value={`year:${y}`}>
+                    {y}년 전체
+                  </option>
+                ))}
+                {periodDropdownModel.months.map(({ year, month }) => (
+                  <option key={`m-${year}-${month}`} value={`month:${year}-${String(month).padStart(2, '0')}`}>
+                    {year}년 {month}월
+                  </option>
+                ))}
+              </select>
+              <FilterChip
+                label="유형 전체"
+                title="선택한 기간·계정 범위 안에서 수입·지출을 구분하지 않고 모두 표시합니다. 기간을 넓히려면 왼쪽에서 「전체 기간」을 고르세요."
+                active={activeLedgerFilter === 'all'}
+                onClick={() => setLedgerContextByFilter('all')}
+              />
+              <select
+                aria-label="계정으로 필터"
+                className={`${selectCn} max-w-[11rem]`}
+                value={ledgerAccountFilter ?? ''}
+                onChange={(e) =>
+                  setLedgerAccountFilter(e.target.value === '' ? null : e.target.value)
+                }
+              >
+                <option value="">전체 계정</option>
+                {ledgerAccountChoices.map((acc) => (
+                  <option key={acc} value={acc}>
+                    {acc}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="항목으로 필터"
+                className={`${selectCn} max-w-[11rem]`}
+                value={
+                  ledgerCategoryFilter == null
+                    ? ''
+                    : ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED
+                      ? LEDGER_CATEGORY_FILTER_UNASSIGNED
+                      : ledgerCategoryFilter
+                }
+                onChange={(e) => {
+                  const v = e.target.value
+                  setLedgerCategoryFilter(v === '' ? null : v)
+                }}
+              >
+                <option value="">전체 항목</option>
+                {hasUncategorizedLedgerRows ? (
+                  <option value={LEDGER_CATEGORY_FILTER_UNASSIGNED}>항목 미지정</option>
+                ) : null}
+                {ledgerCategoryChoices.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <FilterChip
+                label="수입"
+                active={activeLedgerFilter === 'income'}
+                onClick={() => setLedgerContextByFilter('income')}
+              />
+              <FilterChip
+                label="지출"
+                active={activeLedgerFilter === 'expense'}
+                onClick={() => setLedgerContextByFilter('expense')}
+              />
+            </div>
+            <div
+              className="flex flex-wrap gap-2 items-center justify-end shrink-0 ml-auto sm:border-l border-surface-container sm:pl-3"
+              role="group"
+              aria-label="선택한 거래 일괄 작업"
             >
-              <option value="all">전체 기간</option>
-              {periodDropdownModel.sortedYears.map((y) => (
-                <option key={`y-${y}`} value={`year:${y}`}>
-                  {y}년 전체
-                </option>
-              ))}
-              {periodDropdownModel.months.map(({ year, month }) => (
-                <option key={`m-${year}-${month}`} value={`month:${year}-${String(month).padStart(2, '0')}`}>
-                  {year}년 {month}월
-                </option>
-              ))}
-            </select>
-            <FilterChip
-              label="유형 전체"
-              title="선택한 기간·계정 범위 안에서 수입·지출을 구분하지 않고 모두 표시합니다. 기간을 넓히려면 왼쪽에서 「전체 기간」을 고르세요."
-              active={activeLedgerFilter === 'all'}
-              onClick={() => setLedgerContextByFilter('all')}
-            />
-            <select
-              aria-label="계정으로 필터"
-              className={`${selectCn} max-w-[11rem]`}
-              value={ledgerAccountFilter ?? ''}
-              onChange={(e) =>
-                setLedgerAccountFilter(e.target.value === '' ? null : e.target.value)
-              }
-            >
-              <option value="">전체 계정</option>
-              {ledgerAccountChoices.map((acc) => (
-                <option key={acc} value={acc}>
-                  {acc}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="항목으로 필터"
-              className={`${selectCn} max-w-[11rem]`}
-              value={
-                ledgerCategoryFilter == null
-                  ? ''
-                  : ledgerCategoryFilter === LEDGER_CATEGORY_FILTER_UNASSIGNED
-                    ? LEDGER_CATEGORY_FILTER_UNASSIGNED
-                    : ledgerCategoryFilter
-              }
-              onChange={(e) => {
-                const v = e.target.value
-                setLedgerCategoryFilter(v === '' ? null : v)
-              }}
-            >
-              <option value="">전체 항목</option>
-              {hasUncategorizedLedgerRows ? (
-                <option value={LEDGER_CATEGORY_FILTER_UNASSIGNED}>항목 미지정</option>
+              {selectedIds.size > 0 ? (
+                <span className="text-[10px] font-bold text-primary tabular-nums shrink-0">
+                  {selectedIds.size}건
+                </span>
               ) : null}
-              {ledgerCategoryChoices.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-            <FilterChip
-              label="수입"
-              active={activeLedgerFilter === 'income'}
-              onClick={() => setLedgerContextByFilter('income')}
-            />
-            <FilterChip
-              label="지출"
-              active={activeLedgerFilter === 'expense'}
-              onClick={() => setLedgerContextByFilter('expense')}
-            />
-            <span
-              className="hidden sm:block w-px h-5 bg-surface-container shrink-0 self-center mx-0.5"
-              aria-hidden
-            />
-            {selectedIds.size > 0 ? (
-              <span className="text-[10px] font-bold text-primary tabular-nums shrink-0">
-                {selectedIds.size}건
-              </span>
-            ) : null}
-            <button
-              type="button"
-              title="현재 목록에 보이는 거래를 모두 선택"
-              onClick={selectAllInCurrentView}
-              disabled={sortedTransactions.length === 0}
-              className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
-            >
-              전체 선택
-            </button>
-            <button
-              type="button"
-              title="선택 해제"
-              onClick={clearRowSelection}
-              disabled={selectedIds.size === 0}
-              className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
-            >
-              해제
-            </button>
-            <button
-              type="button"
-              title="선택한 거래 삭제"
-              onClick={() => void deleteSelectedRows()}
-              disabled={selectedIds.size === 0}
-              className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 shrink-0"
-            >
-              삭제
-            </button>
+              <button
+                type="button"
+                title="현재 목록에 보이는 거래를 모두 선택"
+                onClick={selectAllInCurrentView}
+                disabled={sortedTransactions.length === 0}
+                className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
+              >
+                전체 선택
+              </button>
+              <button
+                type="button"
+                title="선택 해제"
+                onClick={clearRowSelection}
+                disabled={selectedIds.size === 0}
+                className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
+              >
+                해제
+              </button>
+              <button
+                type="button"
+                title="선택한 거래 삭제"
+                onClick={() => void deleteSelectedRows()}
+                disabled={selectedIds.size === 0}
+                className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 shrink-0"
+              >
+                삭제
+              </button>
+            </div>
           </div>
         </div>
       </div>
