@@ -327,7 +327,12 @@ export default function TransactionTable() {
   const commitEdit = (explicitValue) => {
     if (!editingCell) return
     const { txId, field } = editingCell
-    const source = explicitValue !== undefined ? String(explicitValue) : draftValue
+    const isEventLike =
+      explicitValue != null &&
+      typeof explicitValue === 'object' &&
+      ('target' in explicitValue || 'currentTarget' in explicitValue || 'nativeEvent' in explicitValue)
+    const source =
+      explicitValue !== undefined && !isEventLike ? String(explicitValue) : draftValue
     const nextRaw = source.trim()
     if (field === 'amount') {
       const numeric = Number(nextRaw.replace(/[^\d.-]/g, ''))
@@ -736,7 +741,7 @@ function InlineInput({ value, setValue, onCommit, onCancel }) {
       autoFocus
       value={value}
       onChange={(e) => setValue(e.target.value)}
-      onBlur={onCommit}
+      onBlur={() => onCommit()}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onCommit()
         if (e.key === 'Escape') onCancel()
