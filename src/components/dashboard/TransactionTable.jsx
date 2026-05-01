@@ -456,36 +456,43 @@ export default function TransactionTable() {
               active={activeLedgerFilter === 'expense'}
               onClick={() => setLedgerContextByFilter('expense')}
             />
+            <span
+              className="hidden sm:block w-px h-5 bg-surface-container shrink-0 self-center mx-0.5"
+              aria-hidden
+            />
+            {selectedIds.size > 0 ? (
+              <span className="text-[10px] font-bold text-primary tabular-nums shrink-0">
+                {selectedIds.size}건
+              </span>
+            ) : null}
+            <button
+              type="button"
+              title="현재 목록에 보이는 거래를 모두 선택"
+              onClick={selectAllInCurrentView}
+              disabled={sortedTransactions.length === 0}
+              className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
+            >
+              전체 선택
+            </button>
+            <button
+              type="button"
+              title="선택 해제"
+              onClick={clearRowSelection}
+              disabled={selectedIds.size === 0}
+              className="text-[10px] font-bold px-2 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40 shrink-0"
+            >
+              해제
+            </button>
+            <button
+              type="button"
+              title="선택한 거래 삭제"
+              onClick={() => void deleteSelectedRows()}
+              disabled={selectedIds.size === 0}
+              className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 shrink-0"
+            >
+              삭제
+            </button>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 mt-2 pt-2 border-t border-surface-container">
-          <span className="text-[11px] text-on-surface-variant tabular-nums min-w-[4.5rem] text-right">
-            {selectedIds.size > 0 ? `${selectedIds.size}건 선택` : '\u00a0'}
-          </span>
-          <button
-            type="button"
-            onClick={selectAllInCurrentView}
-            disabled={sortedTransactions.length === 0}
-            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
-          >
-            현재 목록 전체 선택
-          </button>
-          <button
-            type="button"
-            onClick={clearRowSelection}
-            disabled={selectedIds.size === 0}
-            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-surface-container bg-surface-container-low text-on-surface-variant hover:bg-surface-container disabled:opacity-40"
-          >
-            선택 해제
-          </button>
-          <button
-            type="button"
-            onClick={() => void deleteSelectedRows()}
-            disabled={selectedIds.size === 0}
-            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
-          >
-            삭제
-          </button>
         </div>
       </div>
 
