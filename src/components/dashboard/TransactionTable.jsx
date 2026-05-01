@@ -534,7 +534,7 @@ export default function TransactionTable() {
                 </span>
               ) : null}
             </p>
-            <span className="shrink-0 text-[11px] font-bold tabular-nums text-on-surface-variant whitespace-nowrap">
+            <span className="shrink-0 text-sm md:text-base font-extrabold tabular-nums text-[#6b3fd1] whitespace-nowrap">
               잔액: {filteredNetAmount.toLocaleString('ko-KR')}원
             </span>
           </div>
