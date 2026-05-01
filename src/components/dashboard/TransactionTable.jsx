@@ -203,15 +203,14 @@ export default function TransactionTable() {
   const selectCn =
     'min-w-[6.5rem] max-w-[10.5rem] px-2.5 py-1.5 rounded-full text-xs font-bold border border-surface-container bg-surface-container-low text-on-surface cursor-pointer hover:bg-surface-container outline-none focus-visible:ring-2 focus-visible:ring-primary/25 truncate'
 
-  const reviewCount = transactions.filter((tx) => tx.status === 'PENDING').length
-
   const aiFilterIdSet = useMemo(() => {
     if (!aiFilter?.ids) return null
     return new Set([...aiFilter.ids].map((id) => String(id)))
   }, [aiFilter])
 
-  const filteredTransactions = useMemo(() => {
-    const applyPeriodAndAccount = (rows) => {
+  /** 기간·계정·항목(+ AI 검색 결과 한정 시 그 교집합)까지 적용한 풀 — 유형 칩(전체/검토/수입/지출) 적용 전 */
+  const ledgerManualScopePool = useMemo(() => {
+    const applyPeriodAccountCategory = (rows) => {
       let r = rows.filter((tx) => txMatchesLedgerPeriod(tx.date, ledgerPeriodPreset))
       if (ledgerAccountFilter && ledgerAccountFilter.trim()) {
         const afNorm = normalizeLedgerAccountLabel(ledgerAccountFilter)
@@ -227,24 +226,27 @@ export default function TransactionTable() {
     }
 
     if (aiFilterIdSet) {
-      return applyPeriodAndAccount(transactions.filter((tx) => aiFilterIdSet.has(String(tx.id))))
+      return applyPeriodAccountCategory(transactions.filter((tx) => aiFilterIdSet.has(String(tx.id))))
     }
-    const pool = applyPeriodAndAccount(transactions)
+    return applyPeriodAccountCategory(transactions)
+  }, [transactions, aiFilterIdSet, ledgerPeriodPreset, ledgerAccountFilter, ledgerCategoryFilter])
+
+  const reviewCount = useMemo(() => {
+    return ledgerManualScopePool.reduce((n, tx) => {
+      if (tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id)) return n + 1
+      return n
+    }, 0)
+  }, [ledgerManualScopePool, reviewPinnedTxIds])
+
+  const filteredTransactions = useMemo(() => {
+    const pool = ledgerManualScopePool
     if (activeLedgerFilter === 'review') {
       return pool.filter((tx) => tx.status === 'PENDING' || reviewPinnedTxIds.includes(tx.id))
     }
     if (activeLedgerFilter === 'income') return pool.filter((tx) => tx.amount > 0)
     if (activeLedgerFilter === 'expense') return pool.filter((tx) => tx.amount < 0)
     return pool
-  }, [
-    transactions,
-    activeLedgerFilter,
-    reviewPinnedTxIds,
-    aiFilterIdSet,
-    ledgerPeriodPreset,
-    ledgerAccountFilter,
-    ledgerCategoryFilter,
-  ])
+  }, [ledgerManualScopePool, activeLedgerFilter, reviewPinnedTxIds])
 
   const aiMatchCount = useMemo(() => {
     if (!aiFilterIdSet) return 0
