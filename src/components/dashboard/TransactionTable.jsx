@@ -463,6 +463,25 @@ export default function TransactionTable() {
                 active={activeLedgerFilter === 'expense'}
                 onClick={() => setLedgerContextByFilter('expense')}
               />
+              <button
+                type="button"
+                title={
+                  activeLedgerFilter === 'review'
+                    ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
+                    : '검토 대기 거래만 보기'
+                }
+                aria-pressed={activeLedgerFilter === 'review'}
+                onClick={() =>
+                  setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
+                }
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors shrink-0 ${
+                  activeLedgerFilter === 'review'
+                    ? 'bg-primary text-white'
+                    : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                🚨 검토 필요 ({reviewCount})
+              </button>
             </div>
             <div
               className="flex flex-wrap gap-2 items-center justify-end shrink-0 ml-auto sm:border-l border-surface-container sm:pl-3"
@@ -510,26 +529,6 @@ export default function TransactionTable() {
                   수동 필터: {ledgerFilterHint}
                 </span>
               ) : null}
-              <button
-                type="button"
-                title={
-                  activeLedgerFilter === 'review'
-                    ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
-                    : '검토 대기 거래만 보기'
-                }
-                aria-pressed={activeLedgerFilter === 'review'}
-                onClick={() =>
-                  setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
-                }
-                className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
-                  activeLedgerFilter === 'review'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
-                }`}
-              >
-                <span aria-hidden>🚨</span>
-                검토 필요 ({reviewCount})
-              </button>
             </div>
             <span className="shrink-0 text-sm md:text-base font-extrabold tabular-nums text-[#6b3fd1] whitespace-nowrap">
               잔액: {filteredNetAmount.toLocaleString('ko-KR')}원
