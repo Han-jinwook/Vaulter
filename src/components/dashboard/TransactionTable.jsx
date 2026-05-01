@@ -286,7 +286,7 @@ export default function TransactionTable() {
               {ledgerContextTitle}
             </h3>
             <p className="mt-1 text-[11px] text-on-surface-variant">
-              원장 목록은 카드 안쪽에서만 스크롤됩니다.
+              원장 목록은 카드 안쪽에서만 스크롤됩니다. 기간은 첫 드롭다운(「전체 기간」 포함), 거래 유형은 칩으로 좁힙니다.
               {ledgerFilterHint ? (
                 <span className="block mt-0.5 text-primary/90 font-semibold">베이스: {ledgerFilterHint}</span>
               ) : null}
@@ -312,7 +312,8 @@ export default function TransactionTable() {
               ))}
             </select>
             <FilterChip
-              label="전체"
+              label="유형 전체"
+              title="선택한 기간·계정 범위 안에서 수입·지출을 구분하지 않고 모두 표시합니다. 기간을 넓히려면 왼쪽에서 「전체 기간」을 고르세요."
               active={activeLedgerFilter === 'all'}
               onClick={() => setLedgerContextByFilter('all')}
             />
@@ -508,9 +509,11 @@ function sortAccountsForPicker(accounts, filterText) {
   return [...hits, ...rest]
 }
 
-function FilterChip({ label, active, onClick }) {
+function FilterChip({ label, active, onClick, title }) {
   return (
     <button
+      type="button"
+      title={title}
       onClick={onClick}
       className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
         active

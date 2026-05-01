@@ -798,7 +798,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   setLedgerContextByFilter: (filter) => {
     const titleMap: Record<LedgerFilter, string> = {
-      all: '데이터 원장 (전체)',
+      all: '데이터 원장 (유형 전체)',
       income: '수입 내역',
       expense: '지출 내역',
       review: '미분류/검토 대기 내역',
