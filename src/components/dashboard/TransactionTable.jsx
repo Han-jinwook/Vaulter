@@ -508,35 +508,35 @@ export default function TransactionTable() {
               </button>
             </div>
           </div>
-          <div className="w-full mt-1 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-1.5">
+          <div className="w-full mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            <div className="min-w-0 justify-self-start">
               {ledgerFilterHint ? (
-                <span className="text-[11px] text-primary/90 font-semibold truncate">
+                <span className="text-[11px] text-primary/90 font-semibold truncate block">
                   수동 필터: {ledgerFilterHint}
                 </span>
               ) : null}
-              <button
-                type="button"
-                title={
-                  activeLedgerFilter === 'review'
-                    ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
-                    : '검토 대기 거래만 보기'
-                }
-                aria-pressed={activeLedgerFilter === 'review'}
-                onClick={() =>
-                  setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
-                }
-                className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
-                  activeLedgerFilter === 'review'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
-                }`}
-              >
-                <span aria-hidden>🚨</span>
-                검토 필요 ({reviewCount})
-              </button>
             </div>
-            <span className="shrink-0 text-sm md:text-base font-extrabold tabular-nums text-[#6b3fd1] whitespace-nowrap">
+            <button
+              type="button"
+              title={
+                activeLedgerFilter === 'review'
+                  ? '다시 클릭하면 유형 전체(전체 원장)로 돌아갑니다.'
+                  : '검토 대기 거래만 보기'
+              }
+              aria-pressed={activeLedgerFilter === 'review'}
+              onClick={() =>
+                setLedgerContextByFilter(activeLedgerFilter === 'review' ? 'all' : 'review')
+              }
+              className={`justify-self-center inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+                activeLedgerFilter === 'review'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-surface-container-low text-on-surface-variant border-surface-container hover:bg-surface-container'
+              }`}
+            >
+              <span aria-hidden>🚨</span>
+              검토 필요 ({reviewCount})
+            </button>
+            <span className="justify-self-end shrink-0 text-sm md:text-base font-extrabold tabular-nums text-[#6b3fd1] whitespace-nowrap">
               잔액: {filteredNetAmount.toLocaleString('ko-KR')}원
             </span>
           </div>
