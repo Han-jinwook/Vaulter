@@ -215,6 +215,16 @@ function normalizeLedgerAccountLabel(s) {
   return String(s || '').trim().normalize('NFKC')
 }
 
+/** GPT가 사용자 원문 전체를 account에 넣는 경우 — 원장 계정명 매칭에 부적합 */
+function isLikelySentenceLikeAccountQuery(raw) {
+  const s = String(raw || '').trim()
+  if (s.length < 18) return false
+  const spaces = (s.match(/\s/g) || []).length
+  if (spaces >= 2) return true
+  if (/(하자|할까|해줘|해주세요|입니까|되나요|인가요|삭제)\??$/u.test(s)) return true
+  return s.length >= 40
+}
+
 // 로컬 원장 쿼리 (client-side tool 실행)
 function runQueryLedger(transactions, args, knownAccountsList = []) {
   const {
@@ -233,6 +243,8 @@ function runQueryLedger(transactions, args, knownAccountsList = []) {
   } = args
   let results = [...transactions]
   let accountAmbiguous = false
+  /** GPT 인자가 계정명이 아니라 문장으로 들어온 경우 fuzzy 매칭을 건너뜀 */
+  let accountQueryIgnoredSentenceLike = false
   /** @type {string[]} */
   let ambiguousAccounts = []
 
@@ -285,6 +297,9 @@ function runQueryLedger(transactions, args, knownAccountsList = []) {
         } else if (accHits.length === 1) {
           const onlyNorm = normalizeLedgerAccountLabel(accHits[0])
           results = results.filter((tx) => normalizeLedgerAccountLabel(tx.account) === onlyNorm)
+        } else if (isLikelySentenceLikeAccountQuery(accQRaw)) {
+          accountQueryIgnoredSentenceLike = true
+          // 문장형 검색어는 원장 account 필드에 대한 포함 매칭을 하지 않음 (오탐 방지)
         } else {
           results = results.filter((tx) => fuzzyTextMatch(tx.account, accQRaw))
         }
@@ -336,7 +351,8 @@ function runQueryLedger(transactions, args, knownAccountsList = []) {
     endDate: endDate ?? null,
     category: category ?? null,
     merchant: merchant ?? null,
-    account: account ?? null,
+    account: accountQueryIgnoredSentenceLike ? null : account ?? null,
+    ...(accountQueryIgnoredSentenceLike ? { accountIgnoredAsSentenceLike: true } : {}),
     type: type ?? null,
   }
 
@@ -353,6 +369,7 @@ function runQueryLedger(transactions, args, knownAccountsList = []) {
     ...(ambiguousAccounts.length > 0 ? { ambiguousAccounts } : {}),
     appliedFiltersEcho,
     transactions: mapped,
+    ...(accountQueryIgnoredSentenceLike ? { accountQueryIgnoredSentenceLike: true } : {}),
     _db: {
       totalTransactions: transactions.length,
       dateRange: allDates.length
@@ -594,18 +611,35 @@ export default function AIChatPanel() {
         const result = chosenResult || runQueryLedger(transactions, args, knownAccounts)
         const sumDisplay = (result.totalSumAbs ?? 0).toLocaleString('ko-KR')
 
+        const toolArgs = chosenStep?.args ?? args
+        const hasOtherNarrowing = Boolean(
+          toolArgs?.startDate ||
+            toolArgs?.endDate ||
+            (toolArgs?.category && String(toolArgs.category).trim()) ||
+            (toolArgs?.merchant && String(toolArgs.merchant).trim()) ||
+            (toolArgs?.location && String(toolArgs.location).trim() && !result.locationIgnoredAsMeta),
+        )
+        const trivialFullLedger =
+          Boolean(result.accountQueryIgnoredSentenceLike) &&
+          result.count === transactions.length &&
+          transactions.length > 0 &&
+          !hasOtherNarrowing
+
         // 결과가 있으면 원장 UI를 즉시 필터링 (전체 매칭 ID — limit 샘플과 동일 집합)
-        if (result.count > 0 && Array.isArray(result.allMatchingIds) && result.allMatchingIds.length > 0) {
+        if (
+          result.count > 0 &&
+          Array.isArray(result.allMatchingIds) &&
+          result.allMatchingIds.length > 0 &&
+          !trivialFullLedger
+        ) {
           const ids = new Set(result.allMatchingIds)
           const omitLoc = result.locationIgnoredAsMeta && result.appliedFiltersEcho?.locationOmittedWasMetaPhrase
           const parts = [
-            chosenStep?.args.startDate && chosenStep?.args.endDate
-              ? `${chosenStep.args.startDate} ~ ${chosenStep.args.endDate}`
-              : null,
-            !omitLoc && chosenStep?.args.location ? String(chosenStep.args.location) : null,
-            chosenStep?.args.account ? String(chosenStep.args.account) : null,
-            chosenStep?.args.category || null,
-            chosenStep?.args.merchant || null,
+            toolArgs.startDate && toolArgs.endDate ? `${toolArgs.startDate} ~ ${toolArgs.endDate}` : null,
+            !omitLoc && toolArgs.location ? String(toolArgs.location) : null,
+            result.accountQueryIgnoredSentenceLike ? null : toolArgs.account ? String(toolArgs.account) : null,
+            toolArgs.category || null,
+            toolArgs.merchant || null,
           ].filter(Boolean)
           const label = parts.join(' · ') || 'AI 검색 결과'
           setAiFilter({ label, ids })
@@ -629,7 +663,14 @@ export default function AIChatPanel() {
           const metaLocNote = result.locationIgnoredAsMeta
             ? ' 원장 전체 의미로 들어온 location(예: 가계부/원장 명칭)은 소스 필터에서 빼았으니, 답변에 "가계부 소스에만"이라고 거짓으로 한정하지 말 것.'
             : ''
-          ledgerSummary = `총 ${result.count}건, 합계 ₩${sumDisplay}.${truncNote} 답변의 건수·합계는 이 summary와 반드시 일치해야 하며, appliedFiltersEcho의 account가 비었으면 유저에게 말한 결제수단·계정을 단정하지 마라.${metaLocNote}`
+          const accountIgnNote = result.accountQueryIgnoredSentenceLike
+            ? ' account 파라미터가 문장처럼 길어 계정 필터에는 적용하지 않았음(appliedFiltersEcho.accountIgnoredAsSentenceLike). merchant·category·기간·location 등으로 다시 좁혀 조회하라.'
+            : ''
+          const trivialNote =
+            trivialFullLedger && result.accountQueryIgnoredSentenceLike
+              ? ' 다른 좁히기 조건이 없어 원장 전체와 같은 결과였으며 AI 검색 하이라이트는 적용하지 않았다.'
+              : ''
+          ledgerSummary = `총 ${result.count}건, 합계 ₩${sumDisplay}.${truncNote} 답변의 건수·합계는 이 summary와 반드시 일치해야 하며, appliedFiltersEcho의 account가 비었으면 유저에게 말한 결제수단·계정을 단정하지 마라.${metaLocNote}${accountIgnNote}${trivialNote}`
         }
 
         return {
