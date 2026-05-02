@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useAssetStore, selectAssetLines } from '../stores/assetStore'
-import { useAssetStats, formatKRW, getCurrentMonthLabel } from '../selectors/vaultSelectors'
+import { useAssetStats, formatKRW } from '../selectors/vaultSelectors'
 import { AssetAccordionList, DebtAccordionList } from '../components/assets/GoldenAssetLists'
 import {
   ASSET_CATEGORIES,
@@ -12,7 +12,7 @@ import {
 
 export default function AssetsPage() {
   const lines = useAssetStore((s) => s.lines)
-  const { cumulativeBalance, thisMonthFlow, hasData } = useAssetStats()
+  const { cumulativeBalance, thisMonthFlow, hasData, monthLabel } = useAssetStats()
 
   const assets = useMemo(() => selectAssetLines(lines, 'ASSET'), [lines])
   const debts = useMemo(() => selectAssetLines(lines, 'DEBT'), [lines])
@@ -153,7 +153,7 @@ export default function AssetsPage() {
             <p className="text-xs text-[#EDEDED]/55 mt-1">유동성(원장) + 등록 자산 − 등록 부채</p>
           </div>
           <span className="px-3 py-1 rounded-full bg-[#FFD700]/10 text-[#F1C40F] text-xs font-bold border border-[#FFD700]/25">
-            {getCurrentMonthLabel()}
+            {monthLabel}
           </span>
         </div>
 

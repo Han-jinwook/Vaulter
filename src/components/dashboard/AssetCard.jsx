@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useUIStore } from '../../stores/uiStore'
-import { useAssetStats, formatKRW, getCurrentMonthLabel } from '../../selectors/vaultSelectors'
+import { useAssetStats, formatKRW } from '../../selectors/vaultSelectors'
 
 const vaultPrompts = [
   { emoji: '🧾', text: '오늘 먹은 점심 영수증 보관하기' },
@@ -24,6 +24,7 @@ export default function AssetCard({ isExpanded = true }) {
     thisMonthIncome,
     thisMonthExpense,
     expenseChangeRate,
+    monthLabel,
   } = useAssetStats()
 
   // 전월 대비 지출 증감 배지
@@ -90,7 +91,7 @@ export default function AssetCard({ isExpanded = true }) {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-bold text-outline tracking-widest uppercase">누적 가용 자금</span>
           <span className="px-2 py-0.5 bg-primary-container text-on-primary-container text-[10px] rounded-full font-bold">
-            {getCurrentMonthLabel()}
+            {monthLabel}
           </span>
         </div>
 

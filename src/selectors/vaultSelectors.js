@@ -249,9 +249,9 @@ export function useAssetStats() {
   const transactions = useVaultStore((s) => s.transactions)
 
   return useMemo(() => {
-    const now = new Date()
-    const thisYear = now.getFullYear()
-    const thisMonth = now.getMonth()
+    const anchor = latestAnchorDate(transactions)
+    const thisYear = anchor.getFullYear()
+    const thisMonth = anchor.getMonth()
     const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear
     const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1
 
@@ -288,6 +288,7 @@ export function useAssetStats() {
       thisMonthIncome,
       thisMonthExpense: thisMonthConsumptive,
       thisMonthOutflow,
+      monthLabel: `${thisYear}년 ${thisMonth + 1}월 기준`,
       expenseChangeRate:
         lastMonthConsumptive > 0
           ? ((thisMonthConsumptive - lastMonthConsumptive) / lastMonthConsumptive) * 100

@@ -6,7 +6,6 @@ import {
   useAssetStats,
   useThisMonthConsumptiveByCategory,
   formatKRW,
-  getCurrentMonthLabel,
 } from '../selectors/vaultSelectors'
 
 const alertOptions = ['한 달 전', '1주 전', '하루 전', '당일', '알림 끔']
@@ -29,7 +28,7 @@ export default function BudgetPage() {
   const simulateEmailLanding = useVaultStore((s) => s.simulateEmailLanding)
   const openChatPanel = useUIStore((s) => s.openChatPanel)
 
-  const { thisMonthExpense, thisMonthOutflow, hasData } = useAssetStats()
+  const { thisMonthExpense, thisMonthOutflow, hasData, monthLabel } = useAssetStats()
   const byCategory = useThisMonthConsumptiveByCategory()
 
   const categoryRows = useMemo(() => {
@@ -100,7 +99,7 @@ export default function BudgetPage() {
           <div>
             <h2 className="text-lg font-bold">이번 달 소비 예산 (원장 연동)</h2>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              {getCurrentMonthLabel()} · 소비성만 집계 (카드대금·대출 상환 제외)
+              {monthLabel} · 소비성만 집계 (카드대금·대출 상환 제외)
             </p>
           </div>
           <div className="text-right text-sm font-bold tabular-nums">
