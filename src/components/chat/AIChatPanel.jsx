@@ -1013,6 +1013,12 @@ export default function AIChatPanel() {
                   cleanText = `${fact}.`
                 }
               }
+            } else if (
+              /(거래|내역).*(성공적으로\s*)?기록(되었|했|됐)/.test(cleanText) ||
+              /(성공적으로\s*)?기록되었습니다/.test(cleanText)
+            ) {
+              // 도구 결과 없이 성공 문구가 내려오면 오해를 막기 위해 사실 기반 안내로 교정
+              cleanText = '아직 실제 원장 저장은 완료되지 않았어요. 금액·적요·날짜(오늘/어제 가능)와 결제수단(카드/현금/통장)을 알려주시면 바로 기록할게요.'
             }
             const browse = pendingLedgerBrowseRef.current
             const ledgerBrowseSnapshot =

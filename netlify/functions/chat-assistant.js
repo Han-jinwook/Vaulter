@@ -897,26 +897,31 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
       intentOverrideMessage = buildIntentOverrideSystemMessage(routedIntent, latestUserText)
       if (route.intent === 'create_entry') {
         const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext)
-        if (structured?.is_financial_data === true) {
-          if (structured.is_complete !== true) {
-            return json(200, {
-              type: 'reply',
-              text:
-                String(structured.cfo_message || '').trim() ||
-                '거래 기록을 위해 누락된 정보를 알려 주세요.',
-            })
-          }
-          const call = buildAddLedgerToolCallFromStructured(structured)
+        // 기록 의도로 라우팅된 턴은 반드시 "도구 호출 또는 누락 질문"으로만 종료한다.
+        if (!structured || structured?.is_financial_data !== true) {
           return json(200, {
-            type: 'tool_call',
-            assistantMessage: {
-              role: 'assistant',
-              content: null,
-              tool_calls: [call],
-            },
-            calls: [call],
+            type: 'reply',
+            text: '거래 기록 요청으로 이해했어요. 금액·적요·날짜(오늘/어제 가능)와 결제수단(카드/현금/통장)을 알려 주세요.',
           })
         }
+        if (structured.is_complete !== true) {
+          return json(200, {
+            type: 'reply',
+            text:
+              String(structured.cfo_message || '').trim() ||
+              '거래 기록을 위해 누락된 정보를 알려 주세요.',
+          })
+        }
+        const call = buildAddLedgerToolCallFromStructured(structured)
+        return json(200, {
+          type: 'tool_call',
+          assistantMessage: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [call],
+          },
+          calls: [call],
+        })
       }
     }
 
