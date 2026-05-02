@@ -7,8 +7,22 @@ import { useUIStore } from '../../stores/uiStore'
  * 저장소에 연동된 목표가 생기면 여기서 표시한다. (현재 스키마/스토어 미연동 — 데모 숫자 금지)
  * @type {{ icon: string, title: string, current: number, target: number, color: string }[]}
  */
-function getSavedGoalsForDashboard() {
-  return []
+function getSavedGoalsForDashboard(goals = []) {
+  return goals
+    .map((g) => {
+      const title = String(g?.title || '').trim()
+      const target = Math.max(0, Number(g?.targetAmount) || 0)
+      const current = Math.max(0, Number(g?.currentAmount) || 0)
+      if (!title || target <= 0) return null
+      return {
+        icon: 'flag',
+        title,
+        current,
+        target,
+        color: 'from-primary to-primary-dim',
+      }
+    })
+    .filter(Boolean)
 }
 
 function percent(current, target) {
@@ -18,10 +32,11 @@ function percent(current, target) {
 
 export default function AIBriefingCard() {
   const transactions = useVaultStore((s) => s.transactions)
+  const budgetGoals = useVaultStore((s) => s.budgetGoals)
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
   const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
-  const goalCards = getSavedGoalsForDashboard()
+  const goalCards = getSavedGoalsForDashboard(budgetGoals)
 
   return (
     <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl p-6 md:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[396px] overflow-hidden transition-all duration-500 ease-in-out">
