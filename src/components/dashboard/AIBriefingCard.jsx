@@ -39,7 +39,7 @@ export default function AIBriefingCard() {
   const goalCards = getSavedGoalsForDashboard(budgetGoals)
 
   return (
-    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl p-6 md:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[396px] overflow-hidden transition-all duration-500 ease-in-out">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-6 md:px-7 pt-4 md:pt-5 pb-6 md:pb-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[396px] overflow-hidden transition-all duration-500 ease-in-out">
       {!isChartMode ? (
         <>
           <div className="flex justify-between items-start mb-4">

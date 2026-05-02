@@ -78,7 +78,7 @@ export default function AssetCard({ isExpanded = true }) {
   }
 
   return (
-    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl p-6 md:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between relative overflow-hidden group min-h-[396px]">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-6 md:px-7 pt-4 md:pt-5 pb-6 md:pb-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between relative overflow-hidden group min-h-[396px]">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 p-4 opacity-[0.07] group-hover:scale-110 transition-transform duration-500">
         <span className="material-symbols-outlined text-primary" style={{ fontSize: '140px' }}>
