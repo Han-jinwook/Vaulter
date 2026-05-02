@@ -37,9 +37,12 @@ export default function AIBriefingCard() {
   const openVizMode = useUIStore((s) => s.openVizMode)
   const restoreTrinityMode = useUIStore((s) => s.restoreTrinityMode)
   const goalCards = getSavedGoalsForDashboard(budgetGoals)
+  const cardClass = isChartMode
+    ? 'bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-6 md:px-7 pt-4 md:pt-5 pb-6 md:pb-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[396px] overflow-hidden transition-all duration-500 ease-in-out'
+    : 'bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-5 md:px-6 pt-3 md:pt-4 pb-4 md:pb-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[320px] overflow-hidden transition-all duration-500 ease-in-out'
 
   return (
-    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-5 md:px-6 pt-3 md:pt-4 pb-4 md:pb-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[320px] overflow-hidden transition-all duration-500 ease-in-out">
+    <div className={cardClass}>
       {!isChartMode ? (
         <>
           <div className="flex justify-between items-start mb-3">
@@ -149,7 +152,7 @@ export default function AIBriefingCard() {
               시각화 닫기
             </button>
           </div>
-          <VaultSankeyCard transactions={transactions} chartHeight={210} />
+          <VaultSankeyCard transactions={transactions} chartHeight={280} />
         </>
       )}
     </div>
