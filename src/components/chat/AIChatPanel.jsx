@@ -37,6 +37,10 @@ function fmtLedgerLineAmount(n) {
   return num > 0 ? `+₩${abs}` : `-₩${abs}`
 }
 
+function formatWonAbs(n) {
+  return `₩${Math.abs(Number(n) || 0).toLocaleString('ko-KR')}`
+}
+
 function normalizeSearchText(value) {
   return String(value || '')
     .normalize('NFKC')
@@ -416,6 +420,7 @@ export default function AIChatPanel() {
   const isChartMode = useUIStore((s) => s.isChartMode)
   const openVizMode = useUIStore((s) => s.openVizMode)
   const setAiFilter = useUIStore((s) => s.setAiFilter)
+  const clearAiFilter = useUIStore((s) => s.clearAiFilter)
   const setVizFilter = useUIStore((s) => s.setVizFilter)
   const clearVizFilter = useUIStore((s) => s.clearVizFilter)
   const ledgerChatScrollRequest = useUIStore((s) => s.ledgerChatScrollRequest)
@@ -824,6 +829,8 @@ export default function AIChatPanel() {
           account: String(args.account ?? '').trim() || undefined,
         })
         if (!out.success) return out
+        // 새로 추가한 거래가 "이전 AI 필터"에 가려 안 보이는 문제 방지
+        clearAiFilter()
         const needAccount = !String(args.account ?? '').trim()
         const factLine = needAccount ? formatNeedAccountFactLine(out.summary) : ''
         const clarifyNote = factLine
@@ -853,7 +860,7 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, addLedgerEntry, setAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
+    [transactions, updateTransactionInline, addLedgerEntry, setAiFilter, clearAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
   )
 
   const handleLedgerDeleteDecision = useCallback(
@@ -899,6 +906,7 @@ export default function AIChatPanel() {
 
       try {
         let safetyBreaker = 0
+        let latestAddLedgerOutcome = null
         // eslint-disable-next-line no-constant-condition
         while (true) {
           if (++safetyBreaker > 6) throw new Error('응답 루프가 너무 깁니다.')
@@ -943,6 +951,9 @@ export default function AIChatPanel() {
               else if (toolName === 'render_visualization') setThinkingLabel('시각화를 여는 중...')
 
               const toolResult = await executeTool(toolName, args)
+              if (toolName === 'add_ledger_entry') {
+                latestAddLedgerOutcome = toolResult
+              }
 
               conversationRef.current.push({
                 role: 'tool',
@@ -985,7 +996,24 @@ export default function AIChatPanel() {
               }
             }
             // 태그를 제거한 깔끔한 텍스트만 채팅에 표시
-            const cleanText = data.text.replace(/\s*\[WINNER_CATEGORY:[^\]]+\]/g, '').trim()
+            let cleanText = data.text.replace(/\s*\[WINNER_CATEGORY:[^\]]+\]/g, '').trim()
+            if (latestAddLedgerOutcome) {
+              if (!latestAddLedgerOutcome.success) {
+                cleanText = `거래를 기록하지 못했습니다.\n사유: ${latestAddLedgerOutcome.error || '알 수 없는 오류'}`
+              } else {
+                const s = latestAddLedgerOutcome.summary || {}
+                const date = String(s.date || '').replace(/\./g, '-')
+                const memo = String(s.memo || '내용').trim()
+                const detail = String(s.detail_memo || '').trim()
+                const category = String(s.category || '').trim()
+                const fact = [date, memo, detail, formatWonAbs(s.amount), category].filter(Boolean).join(', ')
+                if (latestAddLedgerOutcome.need_account_clarify) {
+                  cleanText = `${fact}.\n결제수단(카드/현금/통장)을 알려주시면 계정까지 바로 반영할게요.`
+                } else {
+                  cleanText = `거래를 기록했습니다.\n${fact}.`
+                }
+              }
+            }
             const browse = pendingLedgerBrowseRef.current
             const ledgerBrowseSnapshot =
               browse &&
