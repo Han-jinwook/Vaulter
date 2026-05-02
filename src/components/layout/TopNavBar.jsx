@@ -399,14 +399,14 @@ export default function TopNavBar() {
           executeGmailConnect()
         }}
       />
-      <div className="w-full max-w-[1440px] mx-auto">
-        <div className="flex justify-between items-center px-4 md:px-8 h-16 md:h-20">
+      <div className="w-full max-w-[1680px] mx-auto">
+        <div className="flex justify-between items-center px-3 md:px-5 h-14 md:h-16">
           {/* Left: Logo + Desktop Nav */}
-          <div className="flex items-center gap-4 md:gap-8 min-w-0">
+          <div className="flex items-center gap-3 md:gap-5 min-w-0">
             <Link to="/" className="text-xl md:text-2xl font-black italic tracking-tight shrink-0 text-primary">
               금고지기
             </Link>
-            <nav className="hidden md:flex items-center gap-5 text-sm font-medium tracking-tight">
+            <nav className="hidden md:flex items-center gap-4 text-sm font-medium tracking-tight">
               {navItems.map((item) => (
                 <Link
                   key={item.path}
@@ -425,7 +425,7 @@ export default function TopNavBar() {
           </div>
 
           {/* Right: Credit + Actions */}
-          <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
             <button
               onClick={openCreditModal}
               className="hidden sm:inline-block px-3 md:px-4 py-1.5 rounded-full font-bold text-xs md:text-sm tabular-nums cursor-pointer transition-colors bg-surface-container text-primary hover:bg-surface-container-high"
@@ -486,7 +486,7 @@ export default function TopNavBar() {
         </div>
 
         {/* Mobile Nav */}
-        <nav className="md:hidden px-3 pb-2 grid grid-cols-4 gap-1 text-[11px] font-semibold tracking-tight">
+        <nav className="md:hidden px-2.5 pb-1.5 grid grid-cols-4 gap-1 text-[11px] font-semibold tracking-tight">
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -494,7 +494,7 @@ export default function TopNavBar() {
               className={`text-center py-2 rounded-lg transition-colors ${
                 isActive(item.path)
                   ? 'text-primary bg-primary/10 font-bold'
-                  : 'text-on-surface-variant hover:bg-surface-container-low'
+                : 'text-on-surface-variant hover:bg-surface-container-low'
               }`}
             >
               <span className="hidden md:inline">{item.desktopLabel}</span>
@@ -504,7 +504,7 @@ export default function TopNavBar() {
         </nav>
       </div>
       {toast ? (
-        <div className="fixed top-24 right-6 z-[60]">
+        <div className="fixed top-20 right-5 z-[60]">
           <div
             className={`px-4 py-3 rounded-2xl shadow-lg text-sm font-semibold ${
               toast.type === 'error' ? 'bg-[#7a1a1a] text-white' : 'bg-[#1e5f2d] text-white'
