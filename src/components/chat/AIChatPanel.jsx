@@ -832,18 +832,18 @@ export default function AIChatPanel() {
         // 새로 추가한 거래가 "이전 AI 필터"에 가려 안 보이는 문제 방지
         clearAiFilter()
         const needAccount = !String(args.account ?? '').trim()
-        const factLine = needAccount ? formatNeedAccountFactLine(out.summary) : ''
+        const factLine = formatNeedAccountFactLine(out.summary)
         const clarifyNote = factLine
           ? '【필수】`fact_line` 을 **첫째 줄**에 그대로 쓰고, **둘째 줄**에만 현금·카드(또는 이체/통장)를 묻는다. "날짜는 확인"·"적요·금액은 확인" 같은 **추상 멘트 금지**.'
-          : '【필수】`summary` (날짜·memo=적요·detail_memo·amount·category)로 `YYYY-MM-DD, 적요, (메모), ₩, 카테고리.` 한 줄을 **첫째 줄**에 쓰고, **둘째 줄**에만 결제수단을 묻는다. 추상 "확인" 멘트 금지.'
+          : '【필수】`summary`(날짜·memo=적요·detail_memo·amount·category)로 `YYYY-MM-DD, 적요, (메모), ₩, 카테고리.` 한 줄을 먼저 쓰고, "성공적으로 기록" 같은 추상 문구 단독 답변은 금지한다.'
         return {
           success: true,
           ...out,
           need_account_clarify: needAccount,
-          ...(needAccount && factLine ? { fact_line: factLine } : {}),
+          ...(factLine ? { fact_line: factLine } : {}),
           note: needAccount
             ? clarifyNote
-            : '클라이언트에 원장이 반영되었습니다. summary로 사용자에게 보고하라.',
+            : clarifyNote,
         }
       }
 
@@ -1010,7 +1010,7 @@ export default function AIChatPanel() {
                 if (latestAddLedgerOutcome.need_account_clarify) {
                   cleanText = `${fact}.\n결제수단(카드/현금/통장)을 알려주시면 계정까지 바로 반영할게요.`
                 } else {
-                  cleanText = `거래를 기록했습니다.\n${fact}.`
+                  cleanText = `${fact}.`
                 }
               }
             }
