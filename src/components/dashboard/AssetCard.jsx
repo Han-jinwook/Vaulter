@@ -152,7 +152,7 @@ export default function AssetCard({ isExpanded = true }) {
         onClick={openUpload}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="mt-0 relative z-10 w-full bg-gradient-to-r from-primary to-primary-dim text-white py-3 px-5 rounded-2xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-shadow duration-300 hover:shadow-xl hover:shadow-primary/30 cursor-pointer"
+        className="mt-3 relative z-10 w-full bg-gradient-to-r from-primary to-primary-dim text-white py-3 px-5 rounded-2xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-shadow duration-300 hover:shadow-xl hover:shadow-primary/30 cursor-pointer"
       >
         {hovered ? (
           <div className="animate-fade-in">
