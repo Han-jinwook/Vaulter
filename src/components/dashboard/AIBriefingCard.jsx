@@ -39,10 +39,10 @@ export default function AIBriefingCard() {
   const goalCards = getSavedGoalsForDashboard(budgetGoals)
 
   return (
-    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-6 md:px-7 pt-4 md:pt-5 pb-6 md:pb-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[396px] overflow-hidden transition-all duration-500 ease-in-out">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-5 md:px-6 pt-3 md:pt-4 pb-4 md:pb-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col h-[320px] overflow-hidden transition-all duration-500 ease-in-out">
       {!isChartMode ? (
         <>
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
@@ -63,13 +63,13 @@ export default function AIBriefingCard() {
             </button>
           </div>
 
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {goalCards.length > 0 ? (
               goalCards.map((goal) => {
                 const pct = percent(goal.current, goal.target)
                 return (
-                  <div key={goal.title} className="rounded-2xl bg-surface-container-low p-5">
-                    <div className="flex items-start justify-between mb-3">
+                  <div key={goal.title} className="rounded-2xl bg-surface-container-low p-4">
+                    <div className="flex items-start justify-between mb-2.5">
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-10 h-10 rounded-xl bg-gradient-to-br ${goal.color} text-white flex items-center justify-center`}
@@ -96,7 +96,7 @@ export default function AIBriefingCard() {
                 )
               })
             ) : (
-              <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-low/40 p-5 text-center">
+              <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-low/40 p-4 text-center">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-outlined text-primary text-2xl">flag</span>
                 </div>
@@ -116,7 +116,7 @@ export default function AIBriefingCard() {
               </div>
             )}
 
-            <div className="rounded-2xl bg-primary/[0.04] border border-primary/10 p-3.5">
+            <div className="rounded-2xl bg-primary/[0.04] border border-primary/10 p-3">
               <p className="text-sm text-on-surface-variant leading-relaxed">
                 {goalCards.length > 0 ? (
                   <>
@@ -135,7 +135,7 @@ export default function AIBriefingCard() {
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2.5">
             <div>
               <h2 className="font-bold text-lg">데이터 시각화</h2>
               <p className="text-[10px] text-outline font-medium">대화 맥락 기반 자금 흐름 분석</p>
@@ -149,7 +149,7 @@ export default function AIBriefingCard() {
               시각화 닫기
             </button>
           </div>
-          <VaultSankeyCard transactions={transactions} chartHeight={280} />
+          <VaultSankeyCard transactions={transactions} chartHeight={210} />
         </>
       )}
     </div>

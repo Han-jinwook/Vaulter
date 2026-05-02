@@ -78,7 +78,7 @@ export default function AssetCard({ isExpanded = true }) {
   }
 
   return (
-    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-6 md:px-7 pt-4 md:pt-5 pb-6 md:pb-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between relative overflow-hidden group min-h-[396px]">
+    <div className="bg-surface-container-lowest rounded-t-3xl rounded-b-2xl px-5 md:px-6 pt-3 md:pt-4 pb-3 md:pb-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col gap-1.5 relative overflow-hidden group h-[320px]">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 p-4 opacity-[0.07] group-hover:scale-110 transition-transform duration-500">
         <span className="material-symbols-outlined text-primary" style={{ fontSize: '140px' }}>
@@ -88,7 +88,7 @@ export default function AssetCard({ isExpanded = true }) {
 
       <div className="relative z-10">
         {/* Header */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-1.5">
           <span className="text-xs font-bold text-outline tracking-widest uppercase">누적 가용 자금</span>
           <span className="px-2 py-0.5 bg-primary-container text-on-primary-container text-[10px] rounded-full font-bold">
             {monthLabel}
@@ -125,8 +125,8 @@ export default function AssetCard({ isExpanded = true }) {
         )}
 
         {/* Sub stats */}
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <div className="bg-surface-container-low p-3.5 rounded-xl">
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <div className="bg-surface-container-low p-3 rounded-xl">
             <div className="text-[10px] text-outline font-bold mb-1">이번 달 금고 결산</div>
             {hasData ? (
               <div className={`text-lg font-bold tabular-nums ${thisMonthFlow >= 0 ? 'text-primary' : 'text-error'}`}>
@@ -136,7 +136,7 @@ export default function AssetCard({ isExpanded = true }) {
               <div className="text-lg font-bold text-outline/40">—</div>
             )}
           </div>
-          <div className="bg-surface-container-low p-3.5 rounded-xl">
+          <div className="bg-surface-container-low p-3 rounded-xl">
             <div className="text-[10px] text-outline font-bold mb-1">이번 달 총 지출</div>
             {hasData ? (
               <div className="text-lg font-bold tabular-nums">{formatKRW(thisMonthExpense)}</div>
@@ -152,7 +152,7 @@ export default function AssetCard({ isExpanded = true }) {
         onClick={openUpload}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="mt-5 relative z-10 w-full bg-gradient-to-r from-primary to-primary-dim text-white py-4.5 px-5 rounded-2xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-shadow duration-300 hover:shadow-xl hover:shadow-primary/30 cursor-pointer"
+        className="mt-0 relative z-10 w-full bg-gradient-to-r from-primary to-primary-dim text-white py-3 px-5 rounded-2xl font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-shadow duration-300 hover:shadow-xl hover:shadow-primary/30 cursor-pointer"
       >
         {hovered ? (
           <div className="animate-fade-in">
