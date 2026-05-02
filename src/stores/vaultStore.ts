@@ -147,6 +147,15 @@ export type SecretVaultDocument = {
   memo: string
 }
 
+export type BudgetGoalItem = {
+  id: string
+  title: string
+  targetAmount: number
+  currentAmount: number
+  targetDate: string
+  createdAt: string
+}
+
 export type VaultBackupSnapshot = {
   version: number
   exportedAt: string
@@ -167,6 +176,8 @@ export type VaultBackupSnapshot = {
   assetMessages?: ChatMessage[]
   /** 예산&목표 탭 전용 채팅 (코치) */
   budgetMessages?: ChatMessage[]
+  /** 예산&목표 저장 목표 카드 */
+  budgetGoals?: BudgetGoalItem[]
   /** 비밀금고 탭 전용 채팅 */
   vaultMessages?: ChatMessage[]
   /** 비밀금고 문서 메타(로컬) */
@@ -178,6 +189,7 @@ type VaultState = {
   messages: ChatMessage[]
   assetMessages: ChatMessage[]
   budgetMessages: ChatMessage[]
+  budgetGoals: BudgetGoalItem[]
   vaultMessages: ChatMessage[]
   secretVaultDocuments: SecretVaultDocument[]
   knownAccounts: string[]
@@ -254,6 +266,12 @@ type VaultState = {
   addChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   addAssetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   addBudgetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
+  upsertBudgetGoal: (input: {
+    title: string
+    targetAmount: number
+    currentAmount?: number
+    targetDate?: string
+  }) => BudgetGoalItem
   addVaultChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   /** 원장 삭제 확인 칩 처리 후 버튼 숨김 */
   resolveLedgerDeleteConfirmMessage: (messageId: number) => void
@@ -804,6 +822,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   messages: initialMessages,
   assetMessages: [],
   budgetMessages: [],
+  budgetGoals: [],
   vaultMessages: [],
   secretVaultDocuments: [],
   knownAccounts: [],
@@ -1369,6 +1388,44 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
+  upsertBudgetGoal: (input) => {
+    const title = String(input.title || '').trim() || '(목표)'
+    const targetAmount = Math.max(0, Math.round(Number(input.targetAmount) || 0))
+    const currentAmount = Math.max(0, Math.round(Number(input.currentAmount) || 0))
+    const targetDate = String(input.targetDate || '').trim()
+    const idKey = `${title.toLowerCase()}|${targetDate}`
+    let created: BudgetGoalItem = {
+      id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      targetAmount,
+      currentAmount,
+      targetDate,
+      createdAt: new Date().toISOString(),
+    }
+    set((s) => {
+      const idx = s.budgetGoals.findIndex(
+        (g) => `${String(g.title || '').trim().toLowerCase()}|${String(g.targetDate || '').trim()}` === idKey,
+      )
+      if (idx < 0) {
+        created = { ...created }
+        return { budgetGoals: [created, ...s.budgetGoals] }
+      }
+      const prev = s.budgetGoals[idx]
+      created = {
+        ...prev,
+        title,
+        targetAmount,
+        currentAmount,
+        targetDate,
+      }
+      const next = [...s.budgetGoals]
+      next[idx] = created
+      return { budgetGoals: next }
+    })
+    void flushLocalVaultSnapshotToKv().catch(() => {})
+    return created
+  },
+
   addVaultChatMessage: (msg) => {
     set((s) => ({
       vaultMessages: [
@@ -1420,6 +1477,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       messages: state.messages,
       assetMessages: state.assetMessages,
       budgetMessages: state.budgetMessages,
+      budgetGoals: state.budgetGoals,
       vaultMessages: state.vaultMessages,
       secretVaultDocuments: state.secretVaultDocuments,
       knownAccounts: state.knownAccounts,
@@ -1438,6 +1496,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : []
     const assetMessages = Array.isArray(snapshot?.assetMessages) ? snapshot.assetMessages : []
     const budgetMessages = Array.isArray(snapshot?.budgetMessages) ? snapshot.budgetMessages : []
+    const budgetGoals = Array.isArray(snapshot?.budgetGoals) ? snapshot.budgetGoals : []
     const vaultMessages = Array.isArray(snapshot?.vaultMessages) ? snapshot.vaultMessages : []
     const secretVaultDocuments = Array.isArray(snapshot?.secretVaultDocuments)
       ? snapshot.secretVaultDocuments
@@ -1450,6 +1509,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       messages,
       assetMessages,
       budgetMessages,
+      budgetGoals,
       vaultMessages,
       secretVaultDocuments,
       knownAccounts,

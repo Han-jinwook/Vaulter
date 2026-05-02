@@ -27,6 +27,7 @@ export default function BudgetPage() {
 
   const simulateEmailLanding = useVaultStore((s) => s.simulateEmailLanding)
   const openChatPanel = useUIStore((s) => s.openChatPanel)
+  const budgetGoals = useVaultStore((s) => s.budgetGoals)
 
   const { thisMonthExpense, thisMonthOutflow, hasData, monthLabel } = useAssetStats()
   const byCategory = useThisMonthConsumptiveByCategory()
@@ -81,12 +82,42 @@ export default function BudgetPage() {
           </p>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-outline-variant/15 bg-surface-container-low/50 p-6 text-sm text-on-surface-variant">
-          <p>
-            <span className="font-bold text-on-surface">저축/목표 카드(진행률)</span>는 이후 스프린트에서 원장·목표
-            DB와 연동할 예정입니다. 지금은 <strong>월간 소비 한도</strong>와 <strong>원장 집계</strong>에 집중하세요.
-          </p>
-        </div>
+        {budgetGoals.length > 0 ? (
+          <div className="mt-5 grid gap-3">
+            {budgetGoals.map((goal) => {
+              const target = Math.max(0, Number(goal.targetAmount) || 0)
+              const current = Math.max(0, Number(goal.currentAmount) || 0)
+              const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0
+              return (
+                <div
+                  key={goal.id}
+                  className="rounded-2xl border border-outline-variant/15 bg-surface-container-low/50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-on-surface truncate">{goal.title}</p>
+                      <p className="text-[11px] text-on-surface-variant mt-0.5">
+                        {goal.targetDate ? `목표일 ${goal.targetDate}` : '목표일 미지정'}
+                      </p>
+                    </div>
+                    <div className="text-xs font-bold tabular-nums text-primary shrink-0">
+                      ₩{current.toLocaleString('ko-KR')} / ₩{target.toLocaleString('ko-KR')}
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2.5 rounded-full bg-surface-container overflow-hidden">
+                    <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-outline-variant/15 bg-surface-container-low/50 p-6 text-sm text-on-surface-variant">
+            <p>
+              아직 저장된 목표가 없습니다. 예산·목표 CFO 채팅에서 목표를 등록하면 이 패널에 즉시 표시됩니다.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 이번 달 소비 예산 — ledger_lines (소비성) 기준 */}

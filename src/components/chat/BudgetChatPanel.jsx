@@ -31,6 +31,7 @@ function budgetMessagesToApiMessages(msgs) {
 export default function BudgetChatPanel() {
   const budgetMessages = useVaultStore((s) => s.budgetMessages)
   const addBudgetChatMessage = useVaultStore((s) => s.addBudgetChatMessage)
+  const upsertBudgetGoal = useVaultStore((s) => s.upsertBudgetGoal)
 
   const [isThinking, setIsThinking] = useState(false)
   const [thinkingLabel, setThinkingLabel] = useState('분석 중...')
@@ -151,16 +152,26 @@ export default function BudgetChatPanel() {
         args.current_amount != null && args.current_amount !== ''
           ? Math.max(0, Math.round(Number(args.current_amount) || 0))
           : 0
+      const saved = upsertBudgetGoal({
+        title,
+        targetAmount,
+        currentAmount: current,
+        targetDate,
+      })
       return {
         success: true,
-        stub: true,
-        message:
-          '목표 항목 등록 요청을 수신했습니다(저장소 연동 전). 이후 버전에서 앱과 동기화됩니다.',
-        received: { title, target_amount: targetAmount, target_date: targetDate, current_amount: current },
+        message: '목표 항목을 저장했습니다. 좌측 패널에서 바로 확인할 수 있어요.',
+        saved: {
+          id: saved.id,
+          title: saved.title,
+          target_amount: saved.targetAmount,
+          current_amount: saved.currentAmount,
+          target_date: saved.targetDate,
+        },
       }
     }
     return { error: `알 수 없는 도구: ${toolName}` }
-  }, [])
+  }, [upsertBudgetGoal])
 
   const runBudgetChat = useCallback(
     async (userText) => {
