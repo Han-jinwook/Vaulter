@@ -9,7 +9,7 @@ export default function DashboardPage() {
   return (
     <>
       {/* Top: Smart Pane Shifting layout */}
-      <div className="mt-1 flex flex-col lg:flex-row gap-6">
+      <div className="mt-2 flex flex-col lg:flex-row gap-6">
         <div
           className={`transition-all duration-500 ease-in-out shrink-0 ${
             isLeftExpanded ? 'lg:w-1/2' : 'lg:w-[78px]'
