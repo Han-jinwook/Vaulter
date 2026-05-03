@@ -16,6 +16,13 @@ function json(statusCode, body) {
   }
 }
 
+function randomIdPart() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+
 /** `add_ledger_entry` 전용 — 지출/수입 각각 이 명칭만 허용(임의 문구·신규 카테고리 금지) */
 const ADD_LEDGER_EXPENSE_CATEGORIES = [
   '식비',
@@ -227,7 +234,7 @@ function inferTypeFromCategory(category) {
 function buildAddLedgerToolCallFromStructured(structured) {
   const d = structured?.extracted_data || {}
   return {
-    id: `call_add_${crypto.randomBytes(6).toString('hex')}`,
+    id: `call_add_${randomIdPart()}`,
     type: 'function',
     function: {
       name: 'add_ledger_entry',
