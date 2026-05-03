@@ -248,6 +248,32 @@ function merchantsLooselySameForCategory(a, b) {
   return na.includes(nb) || nb.includes(na)
 }
 
+const GENERIC_LEDGER_CATEGORIES = new Set(['기타', '기타 지출', '기타 수입'])
+
+function isGenericLedgerCategory(category) {
+  return GENERIC_LEDGER_CATEGORIES.has(String(category || '').trim())
+}
+
+function keywordCategorySuggestions(entry) {
+  const text = `${entry?.summary || ''} ${entry?.detail_memo || ''}`.toLowerCase()
+  if (/(축구|야구|농구|테니스|수영|헬스|필라테스|요가|운동|체육|클럽|레슨|월회비|회비)/.test(text)) {
+    return ['학원비', '건강체육비']
+  }
+  if (/(세탁|빨래|운동화|드라이|수선)/.test(text)) {
+    return ['세탁비', '생활비']
+  }
+  if (/(병원|약국|의원|치과|한의원|검진)/.test(text)) {
+    return ['의료비', '건강/병원']
+  }
+  if (/(택시|버스|지하철|주차|주유|하이패스|대리)/.test(text)) {
+    return ['교통비', '교통/차량']
+  }
+  if (/(카페|커피|식당|분식|김밥|국밥|치킨|피자|편의점|소주|맥주|밥|점심|저녁|아침)/.test(text)) {
+    return ['식비', '간식비']
+  }
+  return []
+}
+
 function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
   const scores = new Map()
   const merchant = String(entry?.summary || '').trim()
@@ -263,10 +289,16 @@ function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
     if (memo && txMemo && (txMemo.includes(memo) || memo.includes(txMemo))) score += 1
     if (score > 0) scores.set(category, (scores.get(category) || 0) + score)
   }
-  return [...scores.entries()]
+  const picked = [...scores.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
-    .slice(0, 2)
     .map(([category]) => ({ label: category, category }))
+  const seen = new Set(picked.map((opt) => opt.category))
+  for (const category of keywordCategorySuggestions(entry)) {
+    if (seen.has(category)) continue
+    picked.push({ label: category, category })
+    seen.add(category)
+  }
+  return picked.slice(0, 2)
 }
 
 /** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
@@ -890,7 +922,13 @@ export default function AIChatPanel() {
             type: 'account_confirm',
             text: `${factLine}\n결제수단을 목록에서 선택하거나, 새 계정명을 입력해 주세요.`,
             txId: Number(out.txId),
-            options: [{ label: out.summary.category, category: out.summary.category }],
+            options: buildCategoryOptionsForPendingEntry(
+              {
+                summary: out.summary.memo,
+                detail_memo: out.summary.detail_memo,
+              },
+              transactions,
+            ),
             accountOptions: buildAccountOptionsForChat(transactions),
           })
         }
@@ -1430,23 +1468,13 @@ function ChatBubble({
 
   useEffect(() => {
     if (msg.type !== 'account_confirm') return
-    if (!selectedCategory.trim() && tx?.category) {
+    if (!selectedCategory.trim() && tx?.category && !isGenericLedgerCategory(tx.category)) {
       setSelectedCategory(tx.category)
     }
     if (!accountInput.trim() && tx?.account) {
       setAccountInput(tx.account)
     }
   }, [accountInput, msg.type, selectedCategory, tx?.account, tx?.category])
-
-  useEffect(() => {
-    if (msg.type !== 'account_confirm') return
-    const options = Array.isArray(msg.options) ? msg.options : []
-    const isLocked = options.length === 1 && options[0]?.category !== '__CUSTOM__'
-    if (!isLocked) return
-    const only = String(options[0]?.category || '').trim()
-    if (!only) return
-    if (selectedCategory !== only) setSelectedCategory(only)
-  }, [msg.type, msg.options, selectedCategory])
 
   const submitCustomCategory = () => {
     const next = customCategory.trim()
@@ -1616,12 +1644,24 @@ function ChatBubble({
   if (msg.type === 'account_confirm') {
     const isResolved = msg.resolved || (tx?.status === 'CONFIRMED' && Boolean(tx?.account))
     const categoryOptions = Array.isArray(msg.options) ? msg.options : []
-    const categoryLocked = categoryOptions.length === 1 && categoryOptions[0]?.category !== '__CUSTOM__'
-    const effectiveCategory = categoryLocked
-      ? String(categoryOptions[0]?.category || '').trim()
-      : selectedCategory.trim()
-    const categoryPickOptions = categoryOptions.filter((o) => o.category !== '__CUSTOM__')
-    const hasCustomCategoryHint = categoryOptions.some((o) => o.category === '__CUSTOM__')
+    const pendingCategoryEntry = {
+      summary: tx?.name || tx?.merchant || '',
+      detail_memo: tx?.userMemo || '',
+    }
+    const computedCategoryOptions = buildCategoryOptionsForPendingEntry(pendingCategoryEntry, transactions)
+    const mergedCategoryOptions = (() => {
+      const picked = []
+      const seen = new Set()
+      for (const opt of [...categoryOptions, ...computedCategoryOptions]) {
+        const category = String(opt?.category || opt?.label || '').trim()
+        if (!category || category === '__CUSTOM__' || isGenericLedgerCategory(category) || seen.has(category)) continue
+        picked.push({ label: category, category })
+        seen.add(category)
+        if (picked.length >= 2) break
+      }
+      return picked
+    })()
+    const effectiveCategory = selectedCategory.trim()
     const canSubmit = Boolean(effectiveCategory && accountInput.trim() && msg.txId)
     const selectSyncedAccount = accountChoicesSet.has(accountInput.trim()) ? accountInput.trim() : ''
     return (
@@ -1634,87 +1674,44 @@ function ChatBubble({
         </div>
         {!isResolved ? (
           <>
-            {categoryLocked ? (
-              <div className="ml-1 mt-1 flex items-center gap-1.5 text-[11px] text-primary font-semibold">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                항목 고정: {effectiveCategory}
-              </div>
-            ) : (
-              <>
-                <div className="ml-1 mt-2 text-[11px] leading-tight text-on-surface-variant">
-                  <span className="font-semibold">항목</span>{' '}
-                  <span className="text-outline/80 font-normal">
-                    (과거 유사 거래·추천 — 택 1)
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-1 ml-1">
-                  {categoryPickOptions.map((opt) => (
-                    <button
-                      key={`${opt.category}-${opt.label}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategory(opt.category)
-                        setIsCustomInputOpen(false)
-                        setCustomCategory('')
-                      }}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
-                        selectedCategory === opt.category
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                  {hasCustomCategoryHint && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomInputOpen(true)}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border border-dashed transition-all duration-200 active:scale-95 ${
-                        isCustomInputOpen
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-primary/5 text-primary border-primary/30 hover:bg-primary/15'
-                      }`}
-                    >
-                      직접 입력…
-                    </button>
-                  )}
-                </div>
-                {isCustomInputOpen && (
-                  <div className="mt-2 ml-1 flex items-center gap-2">
-                    <input
-                      autoFocus
-                      value={customCategory}
-                      onChange={(e) => setCustomCategory(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const next = customCategory.trim()
-                          if (!next) return
-                          setSelectedCategory(next)
-                          setIsCustomInputOpen(false)
-                          setCustomCategory('')
-                        }
-                        if (e.key === 'Escape') setIsCustomInputOpen(false)
-                      }}
-                      placeholder="항목 입력 (예: 구독, 식비)"
-                      className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = customCategory.trim()
-                        if (!next) return
-                        setSelectedCategory(next)
-                        setIsCustomInputOpen(false)
-                      }}
-                      className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold"
-                    >
-                      확인
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+            <div className="ml-1 mt-2 text-[11px] leading-tight text-on-surface-variant">
+              <span className="font-semibold">항목</span>{' '}
+              <span className="text-outline/80 font-normal">
+                (추천 2개 또는 직접 입력)
+              </span>
+            </div>
+            <div className="mt-1 ml-1 grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-stretch">
+              {mergedCategoryOptions.map((opt) => (
+                <button
+                  key={`${opt.category}-${opt.label}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(opt.category)
+                    setCustomCategory('')
+                  }}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
+                    selectedCategory === opt.category
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <input
+                value={customCategory}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setCustomCategory(next)
+                  setSelectedCategory(next.trim())
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setCustomCategory('')
+                }}
+                placeholder="항목 직접 입력"
+                className="min-w-[8rem] px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
             <div className="mt-3 ml-1 grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-stretch">
               <label htmlFor={`acct-pick-${msg.id}`} className="sr-only">
                 목록에서 계정 선택
