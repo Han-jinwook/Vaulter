@@ -249,9 +249,68 @@ function merchantsLooselySameForCategory(a, b) {
 }
 
 const GENERIC_LEDGER_CATEGORIES = new Set(['기타', '기타 지출', '기타 수입'])
+const COMMON_CATEGORY_CANDIDATES_FOR_CHAT = [
+  '식비',
+  '카페/간식',
+  '생활용품',
+  '교통비',
+  '차량유지비',
+  '쇼핑',
+  '의료비',
+  '건강체육비',
+  '학원비',
+  '교육비',
+  '문화여가',
+  '구독료',
+  '세탁비',
+  '미용비',
+  '경조사',
+  '주거비',
+  '통신비',
+  '공과금',
+  '보험료',
+]
+const CATEGORY_INFERENCE_RULES_FOR_CHAT = [
+  { keywords: ['축구', '운동', '체육', '헬스', '요가', '필라테스', '수영', '클럽', '월회비'], categories: ['건강체육비', '학원비'] },
+  { keywords: ['학원', '수강', '강습', '레슨', '학교', '교육', '교재', '과외'], categories: ['학원비', '교육비'] },
+  { keywords: ['병원', '약국', '진료', '치료', '검사', '의료'], categories: ['의료비', '건강체육비'] },
+  { keywords: ['커피', '카페', '간식', '디저트', '빵'], categories: ['카페/간식', '식비'] },
+  { keywords: ['식당', '밥', '점심', '저녁', '아침', '국밥', '분식', '치킨'], categories: ['식비', '카페/간식'] },
+  { keywords: ['택시', '버스', '지하철', '주차', '주유', '기름'], categories: ['교통비', '차량유지비'] },
+  { keywords: ['쿠팡', '쇼핑', '마트', '구매', '주문'], categories: ['쇼핑', '생활용품'] },
+  { keywords: ['넷플릭스', '구독', '멤버십', '유튜브', '스포티파이'], categories: ['구독료', '문화여가'] },
+  { keywords: ['세탁', '빨래', '드라이'], categories: ['세탁비', '생활용품'] },
+  { keywords: ['미용', '헤어', '커트', '네일'], categories: ['미용비', '쇼핑'] },
+]
 
 function isGenericLedgerCategory(category) {
   return GENERIC_LEDGER_CATEGORIES.has(String(category || '').trim())
+}
+
+function pickFallbackCategoryOptions(entry) {
+  if (entry?.type === 'INCOME') {
+    return ['급여', '부수입'].map((category) => ({ label: category, category }))
+  }
+
+  const text = normalizeSearchText(`${entry?.summary || ''} ${entry?.detail_memo || ''}`)
+  const picked = []
+  const seen = new Set()
+  const addCategory = (category) => {
+    const clean = String(category || '').trim()
+    if (!clean || isGenericLedgerCategory(clean) || seen.has(clean)) return
+    picked.push({ label: clean, category: clean })
+    seen.add(clean)
+  }
+
+  for (const rule of CATEGORY_INFERENCE_RULES_FOR_CHAT) {
+    if (rule.keywords.some((keyword) => text.includes(normalizeSearchText(keyword)))) {
+      rule.categories.forEach(addCategory)
+      if (picked.length >= 2) return picked.slice(0, 2)
+    }
+  }
+
+  COMMON_CATEGORY_CANDIDATES_FOR_CHAT.forEach(addCategory)
+  return picked.slice(0, 2)
 }
 
 function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
@@ -272,23 +331,25 @@ function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
   const picked = [...scores.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
     .map(([category]) => ({ label: category, category }))
-  if (picked.length > 0) return picked.slice(0, 1)
-
   const suggested = Array.isArray(entry?.suggestedCategories)
     ? entry.suggestedCategories
     : Array.isArray(entry?.suggested_categories)
       ? entry.suggested_categories
       : []
   const seen = new Set()
-  return suggested
-    .map((category) => String(category || '').trim())
-    .filter((category) => {
-      if (!category || isGenericLedgerCategory(category) || seen.has(category)) return false
-      seen.add(category)
-      return true
-    })
-    .slice(0, 2)
-    .map((category) => ({ label: category, category }))
+  const options = []
+  const addOption = (category) => {
+    const clean = String(category || '').trim()
+    if (!clean || isGenericLedgerCategory(clean) || seen.has(clean)) return
+    options.push({ label: clean, category: clean })
+    seen.add(clean)
+  }
+
+  picked.forEach((opt) => addOption(opt.category))
+  suggested.forEach(addOption)
+  pickFallbackCategoryOptions(entry).forEach((opt) => addOption(opt.category))
+
+  return options.slice(0, 2)
 }
 
 /** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
@@ -1177,10 +1238,10 @@ export default function AIChatPanel() {
             addChatMessage({
               role: 'ai',
               type: 'pending_entry_category',
-              text: '카테고리를 선택하거나 직접 입력해 주세요.',
+              text: '항목을 선택하거나 직접 입력해 주세요.',
               pendingEntry: data.entry,
             })
-            conversationRef.current.push({ role: 'assistant', content: '[카테고리 선택 요청]' })
+            conversationRef.current.push({ role: 'assistant', content: '[항목 선택 요청]' })
             break
           }
 
@@ -1549,7 +1610,7 @@ function ChatBubble({
                     if (e.key === 'Enter') submitCustomCategory()
                     if (e.key === 'Escape') setIsCustomInputOpen(false)
                   }}
-                  placeholder="카테고리 한 단어 입력"
+                  placeholder="항목 한 단어 입력"
                   className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <button
@@ -1593,7 +1654,7 @@ function ChatBubble({
         <div className="flex items-end gap-1.5">
           <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed')}>
             <p className="font-semibold">{fact}.</p>
-            <p className="mt-1 text-on-surface-variant">카테고리를 선택하거나 직접 입력해 주세요.</p>
+            <p className="mt-1 text-on-surface-variant">항목을 선택하거나 직접 입력해 주세요.</p>
           </div>
           <TimeStamp time={msg.time} dateLabel="" />
         </div>
@@ -1627,7 +1688,7 @@ function ChatBubble({
                 onPendingEntryCategory?.(pendingEntry, pendingCategory, accountInput.trim())
               }
             }}
-            placeholder="카테고리 직접 입력"
+            placeholder="항목 직접 입력"
             className="min-w-[9rem] flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
