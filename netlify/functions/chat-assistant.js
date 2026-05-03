@@ -63,10 +63,11 @@ function buildStructuredParseSystemPrompt(today, accounts) {
 - 새 거래 기록 의도(기록/입력/써줘/지출했다/입금됐다 등)이면 is_financial_data=true
 - 조회/수정/삭제/집계/차트 요청, 일반 대화, 감탄문이면 is_financial_data=false
 
-[기록 필수 4요소]
-- category(분류), summary(적요), account(계정), amount(금액)
+[기록 필수 3요소 + 선택 1요소]
+- 필수: category(분류), summary(적요), amount(금액)
+- 선택: account(계정/결제수단)
 - memo는 선택
-- 필수 4요소 중 누락/모호가 하나라도 있으면:
+- 필수 3요소 중 누락/모호가 하나라도 있으면:
   - is_complete=false
   - missing_fields에 필드명 추가
   - extracted_data 해당 필드를 null
@@ -77,7 +78,8 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
 
 [계정(account) 처리]
 - 유저가 결제수단/입금계좌를 말하지 않으면 account=null
-- "은행이체/계좌이체"처럼 모호하면 account=null 로 보고 missing_fields에 account 추가
+- "은행이체/계좌이체"처럼 모호하면 account=null
+- account가 null이어도 다른 필수값이 완전하면 is_complete=true 로 둔다(등록 후 계정 보완 질문은 클라이언트가 처리)
 - 참고 가능한 기존 계정 목록: ${accountHint}
 
 [날짜(date)]
@@ -147,14 +149,14 @@ function normalizeStructuredResult(raw, today) {
   if (!knownCategory) missing.push('category')
   if (!normalizedSummary) missing.push('summary')
   if (!(normalizedAmount > 0)) missing.push('amount')
-  if (!normalizedAccount) missing.push('account')
 
   const declaredMissing = Array.isArray(raw.missing_fields)
     ? raw.missing_fields.map((x) => String(x || '').trim()).filter(Boolean)
     : []
   const mergedMissing = Array.from(new Set([...declaredMissing, ...missing]))
+  const blockingMissing = mergedMissing.filter((f) => f !== 'account')
   const isFinancial = raw.is_financial_data === true
-  const isComplete = isFinancial && mergedMissing.length === 0 && raw.is_complete === true
+  const isComplete = isFinancial && blockingMissing.length === 0
 
   let cfoMessage = String(raw.cfo_message || '').trim()
   if (!cfoMessage && isFinancial && !isComplete) {
