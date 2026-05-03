@@ -106,12 +106,14 @@ function buildStructuredParseSystemPrompt(today, accounts, categories) {
   - extracted_data 해당 필드를 null
   - cfo_message에 누락 필드 질문 작성(추상 멘트 금지)
 
-[카테고리 Enum - 반드시 아래 중 하나]
+[항목 후보 생성 원칙]
 ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
 - 단, 현재 유저 원장에 이미 존재하는 분류도 사용할 수 있다: ${categoryHint}
-- 같은 상호/비슷한 거래가 기존 원장에 있으면 기존 분류를 우선 재사용한다. 예: 같은 세탁소가 과거에 "세탁비"였으면 새 거래도 "세탁비" 후보로 본다.
-- 확신이 없으면 "기타 지출/기타 수입"으로 때우지 말고 category=null, missing_fields에 "category"를 넣어라. 앱이 후보 칩 2개와 직접 입력창을 보여준다.
-- category=null인 경우에도 category_candidates에는 가장 그럴듯한 후보 2개를 넣어라. 후보는 현재 유저 원장 분류 또는 범용 후보 풀에서 고른다.
+- 같은 상호·적요·메모의 기존 거래가 있으면 그 항목을 최우선 후보로 재사용한다.
+- 기존 히스토리 매칭이 없으면 거래의 용도·상황·상식적 의미를 해석해서 범용 후보 풀에서 가장 가까운 항목 2개를 고른다.
+- 확신이 없으면 "기타 지출/기타 수입"으로 때우지 말고 category=null, missing_fields에 "category"를 넣어라. 앱이 항목 후보 칩 2개와 직접 입력창을 보여준다.
+- category=null인 경우 category_candidates는 절대 빈 배열이면 안 된다. 반드시 중복 없는 후보 2개를 채워라.
+- category_candidates는 "기타", "기타 지출", "기타 수입"을 포함하지 않는다.
 - 범용 후보 풀: ${COMMON_CATEGORY_CANDIDATES.join(', ')}
 
 [계정(account) 처리]
@@ -141,7 +143,7 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
     "account": "계정명 또는 null",
     "memo": "선택 메모 또는 null"
   },
-  "category_candidates": ["후보1", "후보2"],
+  "category_candidates": ["항목 후보1", "항목 후보2"],
   "cfo_message": "is_complete=false면 누락 질문, true면 팩트라인+CFO 코멘트"
 }`
 }
@@ -219,7 +221,7 @@ function normalizeStructuredResult(raw, today, existingCategories = []) {
     } else if (mergedMissing.includes('amount')) {
       cfoMessage = '정확한 금액(원)을 알려 주세요.'
     } else if (mergedMissing.includes('category')) {
-      cfoMessage = '카테고리를 선택하거나 직접 입력해 주세요.'
+      cfoMessage = '항목을 선택하거나 직접 입력해 주세요.'
     } else {
       cfoMessage = '기록을 위해 누락 정보를 조금만 더 알려 주세요.'
     }
