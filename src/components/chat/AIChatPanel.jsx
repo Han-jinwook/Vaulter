@@ -984,8 +984,9 @@ export default function AIChatPanel() {
   )
 
   const handlePendingEntryCategory = useCallback(
-    async (entry, category) => {
+    async (entry, category, account) => {
       const pickedCategory = String(category || '').trim()
+      const pickedAccount = String(account || '').trim()
       if (!pickedCategory || !entry) return
       const out = await addLedgerEntry({
         type: entry.type === 'INCOME' ? 'INCOME' : 'EXPENSE',
@@ -994,7 +995,7 @@ export default function AIChatPanel() {
         date: String(entry.date || '').trim(),
         summary: String(entry.summary || '').trim(),
         detail_memo: String(entry.detail_memo || '').trim() || undefined,
-        account: String(entry.account || '').trim() || undefined,
+        account: pickedAccount || String(entry.account || '').trim() || undefined,
       })
       if (!out.success) {
         addChatMessage({
@@ -1006,7 +1007,7 @@ export default function AIChatPanel() {
       }
       clearAiFilter()
       const factLine = formatNeedAccountFactLine(out.summary)
-      if (!String(entry.account || '').trim()) {
+      if (!pickedAccount && !String(entry.account || '').trim()) {
         addChatMessage({
           role: 'ai',
           type: 'account_confirm',
@@ -1578,7 +1579,9 @@ function ChatBubble({
   if (msg.type === 'pending_entry_category') {
     const pendingEntry = msg.pendingEntry || {}
     const categoryOptions = buildCategoryOptionsForPendingEntry(pendingEntry, transactions)
-    const canSubmitCategory = Boolean(customCategory.trim())
+    const pendingCategory = selectedCategory.trim() || customCategory.trim()
+    const selectSyncedAccount = accountChoicesSet.has(accountInput.trim()) ? accountInput.trim() : ''
+    const canSubmitPendingEntry = Boolean(pendingCategory && accountInput.trim())
     const fact = [
       String(pendingEntry.date || '').replace(/\./g, '-'),
       String(pendingEntry.summary || '').trim(),
@@ -1601,29 +1604,68 @@ function ChatBubble({
               type="button"
               onClick={() => {
                 setCustomCategory(opt.category)
-                onPendingEntryCategory?.(pendingEntry, opt.category)
+                setSelectedCategory(opt.category)
               }}
-              className="px-3 py-1.5 bg-primary/5 text-primary text-xs font-bold rounded-lg border border-primary/15 hover:bg-primary hover:text-white transition-all duration-200 active:scale-95"
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all duration-200 active:scale-95 ${
+                pendingCategory === opt.category
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-primary/5 text-primary border-primary/15 hover:bg-primary hover:text-white'
+              }`}
             >
               {opt.label}
             </button>
           ))}
           <input
             value={customCategory}
-            onChange={(e) => setCustomCategory(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value
+              setCustomCategory(next)
+              setSelectedCategory(next.trim())
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && canSubmitCategory) {
-                onPendingEntryCategory?.(pendingEntry, customCategory.trim())
+              if (e.key === 'Enter' && canSubmitPendingEntry) {
+                onPendingEntryCategory?.(pendingEntry, pendingCategory, accountInput.trim())
               }
             }}
             placeholder="카테고리 직접 입력"
             className="min-w-[9rem] flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
+        </div>
+        <div className="mt-2 ml-1 grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-stretch">
+          <label htmlFor={`pending-acct-pick-${msg.id}`} className="sr-only">
+            계정 선택
+          </label>
+          <select
+            id={`pending-acct-pick-${msg.id}`}
+            value={selectSyncedAccount}
+            onChange={(e) => setAccountInput(String(e.target.value))}
+            disabled={sortedAccountChoices.length === 0}
+            className="w-full min-w-0 truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">계정 선택</option>
+            {sortedAccountChoices.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <input
+            value={accountInput}
+            onChange={(e) => setAccountInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canSubmitPendingEntry) {
+                onPendingEntryCategory?.(pendingEntry, pendingCategory, accountInput.trim())
+              }
+            }}
+            placeholder="새 계정명 입력"
+            className="w-full min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            autoComplete="off"
+          />
           <button
             type="button"
-            disabled={!canSubmitCategory}
-            onClick={() => onPendingEntryCategory?.(pendingEntry, customCategory.trim())}
-            className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
+            disabled={!canSubmitPendingEntry}
+            onClick={() => onPendingEntryCategory?.(pendingEntry, pendingCategory, accountInput.trim())}
+            className="w-full px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50 sm:w-auto sm:min-w-[3.5rem]"
           >
             확인
           </button>
