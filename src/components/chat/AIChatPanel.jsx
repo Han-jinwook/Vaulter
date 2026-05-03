@@ -235,6 +235,40 @@ function buildAccountOptionsForChat(transactions = []) {
     .map((account) => ({ label: account, category: account }))
 }
 
+function normalizeMerchantSlugForCategory(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, '')
+}
+
+function merchantsLooselySameForCategory(a, b) {
+  const na = normalizeMerchantSlugForCategory(a)
+  const nb = normalizeMerchantSlugForCategory(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (na.length < 3 || nb.length < 3) return false
+  return na.includes(nb) || nb.includes(na)
+}
+
+function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
+  const scores = new Map()
+  const merchant = String(entry?.summary || '').trim()
+  const memo = String(entry?.detail_memo || '').trim()
+  for (const tx of Array.isArray(transactions) ? transactions : []) {
+    if (tx?.status !== 'CONFIRMED') continue
+    const category = String(tx?.category || '').trim()
+    if (!category || category === '기타' || category === '기타 지출') continue
+    const txMerchant = String(tx?.name || tx?.merchant || '').trim()
+    const txMemo = String(tx?.userMemo || '').trim()
+    let score = 0
+    if (merchantsLooselySameForCategory(merchant, txMerchant)) score += 3
+    if (memo && txMemo && (txMemo.includes(memo) || memo.includes(txMemo))) score += 1
+    if (score > 0) scores.set(category, (scores.get(category) || 0) + score)
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
+    .slice(0, 2)
+    .map(([category]) => ({ label: category, category }))
+}
+
 /** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
 function findChatMessageForLedgerTx(messages, txId) {
   const id = String(txId ?? '')
@@ -920,6 +954,45 @@ export default function AIChatPanel() {
     [deleteLine, addChatMessage, resolveLedgerDeleteConfirmMessage],
   )
 
+  const handlePendingEntryCategory = useCallback(
+    async (entry, category) => {
+      const pickedCategory = String(category || '').trim()
+      if (!pickedCategory || !entry) return
+      const out = await addLedgerEntry({
+        type: entry.type === 'INCOME' ? 'INCOME' : 'EXPENSE',
+        category: pickedCategory,
+        amount: Number(entry.amount),
+        date: String(entry.date || '').trim(),
+        summary: String(entry.summary || '').trim(),
+        detail_memo: String(entry.detail_memo || '').trim() || undefined,
+        account: String(entry.account || '').trim() || undefined,
+      })
+      if (!out.success) {
+        addChatMessage({
+          role: 'ai',
+          type: 'text',
+          text: `거래를 기록하지 못했습니다.\n사유: ${out.error || '알 수 없는 오류'}`,
+        })
+        return
+      }
+      clearAiFilter()
+      const factLine = formatNeedAccountFactLine(out.summary)
+      if (!String(entry.account || '').trim()) {
+        addChatMessage({
+          role: 'ai',
+          type: 'account_confirm',
+          text: `${factLine}\n결제수단을 목록에서 선택하거나, 새 계정명을 입력해 주세요.`,
+          txId: Number(out.txId),
+          options: [{ label: out.summary.category, category: out.summary.category }],
+          accountOptions: buildAccountOptionsForChat(transactions),
+        })
+      } else {
+        addChatMessage({ role: 'ai', type: 'text', text: factLine })
+      }
+    },
+    [addChatMessage, addLedgerEntry, clearAiFilter, transactions],
+  )
+
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
   const executeAiChat = useCallback(
     async (userText) => {
@@ -1070,6 +1143,17 @@ export default function AIChatPanel() {
             break
           }
 
+          if (data.type === 'category_confirm') {
+            addChatMessage({
+              role: 'ai',
+              type: 'pending_entry_category',
+              text: '카테고리를 선택하거나 직접 입력해 주세요.',
+              pendingEntry: data.entry,
+            })
+            conversationRef.current.push({ role: 'assistant', content: '[카테고리 선택 요청]' })
+            break
+          }
+
           throw new Error('알 수 없는 응답 형식입니다.')
         }
       } catch (error) {
@@ -1080,7 +1164,7 @@ export default function AIChatPanel() {
         setThinkingLabel('생각하는 중...')
       }
     },
-    [addChatMessage, executeTool, registeredAccountChoices, transactions],
+    [addChatMessage, executeTool, handlePendingEntryCategory, registeredAccountChoices, transactions],
   )
 
   // executeAiChat가 의존성으로 바뀌어도 composer는 리렌더·IME 충돌이 없게 항상 동일한 콜백 참조만 전달
@@ -1160,6 +1244,7 @@ export default function AIChatPanel() {
                 onAcknowledge={acknowledgeAlert}
                 onLedgerResolve={resolveLedgerReview}
                 onLedgerDeleteDecision={handleLedgerDeleteDecision}
+                onPendingEntryCategory={handlePendingEntryCategory}
               />
             </div>
           )
@@ -1320,6 +1405,7 @@ function ChatBubble({
   onAcknowledge,
   onLedgerResolve,
   onLedgerDeleteDecision,
+  onPendingEntryCategory,
 }) {
   const setAiFilter = useUIStore((s) => s.setAiFilter)
   const restoreTrinityModeChat = useUIStore((s) => s.restoreTrinityMode)
@@ -1466,6 +1552,63 @@ function ChatBubble({
             분류 완료
           </div>
         )}
+      </div>
+    )
+  }
+
+  if (msg.type === 'pending_entry_category') {
+    const pendingEntry = msg.pendingEntry || {}
+    const categoryOptions = buildCategoryOptionsForPendingEntry(pendingEntry, transactions)
+    const canSubmitCategory = Boolean(customCategory.trim())
+    const fact = [
+      String(pendingEntry.date || '').replace(/\./g, '-'),
+      String(pendingEntry.summary || '').trim(),
+      String(pendingEntry.detail_memo || '').trim(),
+      pendingEntry.amount ? formatWonAbs(pendingEntry.amount) : '',
+    ].filter(Boolean).join(', ')
+    return (
+      <div className="flex flex-col gap-1 max-w-[94%]">
+        <div className="flex items-end gap-1.5">
+          <div className={aiSpotlightCn(spotlight, 'bg-surface-container-low text-on-surface px-3.5 py-2.5 rounded-2xl rounded-tl-none leading-relaxed')}>
+            <p className="font-semibold">{fact}.</p>
+            <p className="mt-1 text-on-surface-variant">카테고리를 선택하거나 직접 입력해 주세요.</p>
+          </div>
+          <TimeStamp time={msg.time} dateLabel="" />
+        </div>
+        <div className="flex flex-wrap gap-2 mt-1 ml-1">
+          {categoryOptions.map((opt) => (
+            <button
+              key={`${opt.category}-${opt.label}`}
+              type="button"
+              onClick={() => {
+                setCustomCategory(opt.category)
+                onPendingEntryCategory?.(pendingEntry, opt.category)
+              }}
+              className="px-3 py-1.5 bg-primary/5 text-primary text-xs font-bold rounded-lg border border-primary/15 hover:bg-primary hover:text-white transition-all duration-200 active:scale-95"
+            >
+              {opt.label}
+            </button>
+          ))}
+          <input
+            value={customCategory}
+            onChange={(e) => setCustomCategory(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canSubmitCategory) {
+                onPendingEntryCategory?.(pendingEntry, customCategory.trim())
+              }
+            }}
+            placeholder="카테고리 직접 입력"
+            className="min-w-[9rem] flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          <button
+            type="button"
+            disabled={!canSubmitCategory}
+            onClick={() => onPendingEntryCategory?.(pendingEntry, customCategory.trim())}
+            className="px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
+          >
+            확인
+          </button>
+        </div>
       </div>
     )
   }

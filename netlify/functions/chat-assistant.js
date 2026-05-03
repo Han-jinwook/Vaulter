@@ -60,8 +60,9 @@ function todayIsoDate() {
   return `${y}-${m}-${d}`
 }
 
-function buildStructuredParseSystemPrompt(today, accounts) {
+function buildStructuredParseSystemPrompt(today, accounts, categories) {
   const accountHint = accounts.length ? accounts.join(', ') : '없음'
+  const categoryHint = categories.length ? categories.join(', ') : '없음'
   return `너는 금고지기(Vault Keeper) 앱의 AI 비서다.
 유저 메시지에서 "새 거래를 기록하려는 의도"를 구조화한다.
 출력은 반드시 JSON object 하나만 반환한다. 설명/코드블록/추가 문장 금지.
@@ -84,6 +85,8 @@ function buildStructuredParseSystemPrompt(today, accounts) {
 
 [카테고리 Enum - 반드시 아래 중 하나]
 ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
+- 단, 현재 유저 원장에 이미 존재하는 분류도 사용할 수 있다: ${categoryHint}
+- 같은 상호/비슷한 거래가 기존 원장에 있으면 기존 분류를 우선 재사용한다. 예: 같은 세탁소가 과거에 "세탁비"였으면 새 거래도 "세탁비" 후보로 본다.
 
 [계정(account) 처리]
 - 유저가 결제수단/입금계좌를 말하지 않으면 account=null
@@ -103,7 +106,7 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
 {
   "is_financial_data": boolean,
   "is_complete": boolean,
-  "missing_fields": ["account", "category"],
+  "missing_fields": ["category"],
   "extracted_data": {
     "date": "YYYY-MM-DD",
     "amount": 0,
@@ -124,7 +127,7 @@ function parseJsonObjectStrict(text) {
   }
 }
 
-function normalizeStructuredResult(raw, today) {
+function normalizeStructuredResult(raw, today, existingCategories = []) {
   const fallback = {
     is_financial_data: false,
     is_complete: false,
@@ -144,6 +147,7 @@ function normalizeStructuredResult(raw, today) {
   const data = raw.extracted_data && typeof raw.extracted_data === 'object' ? raw.extracted_data : {}
   const amount = Math.abs(Number(data.amount))
   const categoryText = data.category == null ? '' : String(data.category).trim()
+  const existingCategorySet = new Set(existingCategories.map((x) => String(x || '').trim()).filter(Boolean))
   const summaryText = data.summary == null ? '' : String(data.summary).trim()
   const accountText = data.account == null ? '' : String(data.account).trim()
   const memoText = data.memo == null ? '' : String(data.memo).trim()
@@ -151,7 +155,7 @@ function normalizeStructuredResult(raw, today) {
   const normalizedDate = dateText || today
 
   const knownCategory =
-    categoryText && (EXPENSE_CATEGORY_SET.has(categoryText) || INCOME_CATEGORY_SET.has(categoryText))
+    categoryText && (EXPENSE_CATEGORY_SET.has(categoryText) || INCOME_CATEGORY_SET.has(categoryText) || existingCategorySet.has(categoryText))
       ? categoryText
       : null
   const normalizedAmount = Number.isFinite(amount) ? amount : 0
@@ -180,7 +184,7 @@ function normalizeStructuredResult(raw, today) {
     } else if (mergedMissing.includes('amount')) {
       cfoMessage = '정확한 금액(원)을 알려 주세요.'
     } else if (mergedMissing.includes('category')) {
-      cfoMessage = `카테고리를 알려 주세요. (${ADD_LEDGER_ALL_CATEGORIES.join(', ')})`
+      cfoMessage = '카테고리를 선택하거나 직접 입력해 주세요.'
     } else {
       cfoMessage = '기록을 위해 누락 정보를 조금만 더 알려 주세요.'
     }
@@ -225,12 +229,15 @@ async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessa
   const accounts = Array.isArray(dbContext?.accounts)
     ? dbContext.accounts.map((x) => String(x || '').trim()).filter(Boolean)
     : []
+  const categories = Array.isArray(dbContext?.categories)
+    ? dbContext.categories.map((x) => String(x || '').trim()).filter(Boolean)
+    : []
   const body = {
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     temperature: 0,
     messages: [
-      { role: 'system', content: buildStructuredParseSystemPrompt(today, accounts) },
+      { role: 'system', content: buildStructuredParseSystemPrompt(today, accounts, categories) },
       { role: 'user', content: buildStructuredEntryUserContent(recentMessages, userText) },
     ],
   }
@@ -246,7 +253,7 @@ async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessa
   const payload = await res.json()
   const content = payload?.choices?.[0]?.message?.content
   const parsed = parseJsonObjectStrict(content)
-  return normalizeStructuredResult(parsed, today)
+  return normalizeStructuredResult(parsed, today, categories)
 }
 
 function inferTypeFromCategory(category) {
@@ -938,6 +945,29 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
           })
         }
         if (structured.is_complete !== true) {
+          const d = structured.extracted_data || {}
+          const blockingMissing = Array.isArray(structured.missing_fields)
+            ? structured.missing_fields.filter((f) => f !== 'account')
+            : []
+          const onlyCategoryMissing =
+            blockingMissing.length === 1 &&
+            blockingMissing[0] === 'category' &&
+            d.summary &&
+            Number(d.amount) > 0 &&
+            d.date
+          if (onlyCategoryMissing) {
+            return json(200, {
+              type: 'category_confirm',
+              entry: {
+                type: inferTypeFromCategory(d.category),
+                date: d.date,
+                amount: Number(d.amount),
+                summary: d.summary,
+                detail_memo: d.memo || '',
+                account: d.account || '',
+              },
+            })
+          }
           return json(200, {
             type: 'reply',
             text:

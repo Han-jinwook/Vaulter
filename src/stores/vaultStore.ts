@@ -306,6 +306,7 @@ function normalizeKeeperAddLedgerCategory(
   category: string,
 ): string {
   const raw = String(category || '').trim()
+  if (raw) return raw
   const allow = type === 'INCOME' ? KEEPER_INCOME_SET : KEEPER_EXPENSE_SET
   if (allow.has(raw)) return raw
   return type === 'INCOME' ? '기타 수입' : '기타 지출'
