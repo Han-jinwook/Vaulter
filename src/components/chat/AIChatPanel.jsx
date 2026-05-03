@@ -1726,7 +1726,7 @@ function ChatBubble({
                 disabled={sortedAccountChoices.length === 0}
                 className="w-full min-w-0 truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="">목록에서 계정 선택</option>
+                <option value="">계정 선택</option>
                 {sortedAccountChoices.map((a) => (
                   <option key={a} value={a}>
                     {a}
