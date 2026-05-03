@@ -222,10 +222,15 @@ function formatNeedAccountFactLine(summary) {
   return parts.length ? `${parts.join(', ')}.` : ''
 }
 
-function buildAccountOptionsForChat(knownAccounts = []) {
-  return Array.from(
-    new Set((Array.isArray(knownAccounts) ? knownAccounts : []).map((x) => String(x || '').trim()).filter(Boolean)),
-  )
+function buildAccountOptionsForChat(transactions = []) {
+  const canonicalByNorm = new Map()
+  for (const tx of Array.isArray(transactions) ? transactions : []) {
+    const account = String(tx?.account || '').trim()
+    if (!account) continue
+    const norm = normalizeLedgerAccountLabel(account)
+    if (!canonicalByNorm.has(norm)) canonicalByNorm.set(norm, account)
+  }
+  return [...canonicalByNorm.values()]
     .sort((a, b) => a.localeCompare(b, 'ko'))
     .map((account) => ({ label: account, category: account }))
 }
@@ -472,6 +477,10 @@ export default function AIChatPanel() {
   const sliceStart = Math.max(0, totalMsgCount - displayCount)
   const visibleMessages = messages.slice(sliceStart)
   const hasOlderMessages = sliceStart > 0
+  const registeredAccountChoices = useMemo(
+    () => buildAccountOptionsForChat(transactions).map((opt) => opt.category),
+    [transactions],
+  )
 
   // 채팅 하단 스크롤
   const scrollChatToBottom = useCallback((smooth = true) => {
@@ -621,7 +630,7 @@ export default function AIChatPanel() {
         for (let idx = 0; idx < retryPlan.length; idx += 1) {
           const step = retryPlan[idx]
           if (idx > 0 && step.loadingLabel) setThinkingLabel(step.loadingLabel)
-          const result = runQueryLedger(transactions, step.args, knownAccounts)
+          const result = runQueryLedger(transactions, step.args, registeredAccountChoices)
           attempts.push({
             label: step.label,
             filters: formatQueryFilterSummary(step.args),
@@ -639,7 +648,7 @@ export default function AIChatPanel() {
           }
         }
 
-        const result = chosenResult || runQueryLedger(transactions, args, knownAccounts)
+        const result = chosenResult || runQueryLedger(transactions, args, registeredAccountChoices)
         const sumDisplay = (result.totalSumAbs ?? 0).toLocaleString('ko-KR')
 
         const toolArgs = chosenStep?.args ?? args
@@ -848,7 +857,7 @@ export default function AIChatPanel() {
             text: `${factLine}\n결제수단을 목록에서 선택하거나, 새 계정명을 입력해 주세요.`,
             txId: Number(out.txId),
             options: [{ label: out.summary.category, category: out.summary.category }],
-            accountOptions: buildAccountOptionsForChat(knownAccounts),
+            accountOptions: buildAccountOptionsForChat(transactions),
           })
         }
         const clarifyNote = factLine
@@ -879,7 +888,7 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, addLedgerEntry, addChatMessage, setAiFilter, clearAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
+    [transactions, updateTransactionInline, addLedgerEntry, addChatMessage, setAiFilter, clearAiFilter, openVizMode, setVizFilter, clearVizFilter, registeredAccountChoices],
   )
 
   const handleLedgerDeleteDecision = useCallback(
@@ -933,7 +942,7 @@ export default function AIChatPanel() {
           // 매 요청마다 현재 원장 DB 현황을 함께 전송 (GPT가 계정·카테고리를 정확히 알게)
           const allDates = transactions.map((t) => normalizeDate(t.date)).filter(Boolean).sort()
           const dbContext = {
-            accounts: knownAccounts,
+            accounts: registeredAccountChoices,
             categories: [...new Set(transactions.map((t) => t.category).filter(Boolean))],
             totalTransactions: transactions.length,
             dateRange: allDates.length
@@ -1071,7 +1080,7 @@ export default function AIChatPanel() {
         setThinkingLabel('생각하는 중...')
       }
     },
-    [addChatMessage, executeTool],
+    [addChatMessage, executeTool, registeredAccountChoices, transactions],
   )
 
   // executeAiChat가 의존성으로 바뀌어도 composer는 리렌더·IME 충돌이 없게 항상 동일한 콜백 참조만 전달
@@ -1320,15 +1329,8 @@ function ChatBubble({
   const [accountInput, setAccountInput] = useState('')
   const tx = msg.txId ? transactions.find((t) => t.id === String(msg.txId)) : null
 
-  // 복원된 메시지에서도 기존 선택값을 복구하고,
-  // msg.accountOptions가 비어 있으면 현재 knownAccounts를 fallback으로 사용
-  const liveAccountOptions = (() => {
-    const msgOpts = Array.isArray(msg.accountOptions) ? msg.accountOptions : []
-    if (msgOpts.length > 0) return msgOpts
-    return (knownAccounts ?? [])
-      .filter(Boolean)
-      .map((a) => ({ label: a, category: a }))
-  })()
+  // 계정 드롭다운은 저장된 메시지 스냅샷이 아니라 현재 원장에 실제 존재하는 계정만 반영한다.
+  const liveAccountOptions = buildAccountOptionsForChat(transactions)
 
   const sortedAccountChoices = useMemo(() => {
     const opts = Array.isArray(liveAccountOptions) ? liveAccountOptions : []
