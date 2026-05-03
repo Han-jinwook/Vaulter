@@ -222,6 +222,14 @@ function formatNeedAccountFactLine(summary) {
   return parts.length ? `${parts.join(', ')}.` : ''
 }
 
+function buildAccountOptionsForChat(knownAccounts = []) {
+  return Array.from(
+    new Set((Array.isArray(knownAccounts) ? knownAccounts : []).map((x) => String(x || '').trim()).filter(Boolean)),
+  )
+    .sort((a, b) => a.localeCompare(b, 'ko'))
+    .map((account) => ({ label: account, category: account }))
+}
+
 /** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
 function findChatMessageForLedgerTx(messages, txId) {
   const id = String(txId ?? '')
@@ -833,6 +841,16 @@ export default function AIChatPanel() {
         clearAiFilter()
         const needAccount = !String(args.account ?? '').trim()
         const factLine = formatNeedAccountFactLine(out.summary)
+        if (needAccount) {
+          addChatMessage({
+            role: 'ai',
+            type: 'account_confirm',
+            text: `${factLine}\n결제수단을 목록에서 선택하거나, 새 계정명을 입력해 주세요.`,
+            txId: Number(out.txId),
+            options: [{ label: out.summary.category, category: out.summary.category }],
+            accountOptions: buildAccountOptionsForChat(knownAccounts),
+          })
+        }
         const clarifyNote = factLine
           ? '【필수】`fact_line` 을 **첫째 줄**에 그대로 쓰고, **둘째 줄**에만 현금·카드(또는 이체/통장)를 묻는다. "날짜는 확인"·"적요·금액은 확인" 같은 **추상 멘트 금지**.'
           : '【필수】`summary`(날짜·memo=적요·detail_memo·amount·category)로 `YYYY-MM-DD, 적요, (메모), ₩, 카테고리.` 한 줄을 먼저 쓰고, "성공적으로 기록" 같은 추상 문구 단독 답변은 금지한다.'
@@ -840,6 +858,7 @@ export default function AIChatPanel() {
           success: true,
           ...out,
           need_account_clarify: needAccount,
+          account_confirm_message_added: needAccount,
           ...(factLine ? { fact_line: factLine } : {}),
           note: needAccount
             ? clarifyNote
@@ -860,7 +879,7 @@ export default function AIChatPanel() {
 
       return { error: `알 수 없는 도구: ${toolName}` }
     },
-    [transactions, updateTransactionInline, addLedgerEntry, setAiFilter, clearAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
+    [transactions, updateTransactionInline, addLedgerEntry, addChatMessage, setAiFilter, clearAiFilter, openVizMode, setVizFilter, clearVizFilter, knownAccounts],
   )
 
   const handleLedgerDeleteDecision = useCallback(
@@ -1007,7 +1026,9 @@ export default function AIChatPanel() {
                 const detail = String(s.detail_memo || '').trim()
                 const category = String(s.category || '').trim()
                 const fact = [date, memo, detail, formatWonAbs(s.amount), category].filter(Boolean).join(', ')
-                if (latestAddLedgerOutcome.need_account_clarify) {
+                if (latestAddLedgerOutcome.account_confirm_message_added) {
+                  cleanText = ''
+                } else if (latestAddLedgerOutcome.need_account_clarify) {
                   cleanText = `${fact}.\n결제수단(카드/현금/통장)을 알려주시면 계정까지 바로 반영할게요.`
                 } else {
                   cleanText = `${fact}.`
@@ -1028,12 +1049,14 @@ export default function AIChatPanel() {
               browse.label
                 ? { label: browse.label, transactionIds: [...browse.transactionIds] }
                 : undefined
-            addChatMessage({
-              role: 'ai',
-              type: 'text',
-              text: cleanText,
-              ...(ledgerBrowseSnapshot ? { ledgerBrowseSnapshot } : {}),
-            })
+            if (cleanText) {
+              addChatMessage({
+                role: 'ai',
+                type: 'text',
+                text: cleanText,
+                ...(ledgerBrowseSnapshot ? { ledgerBrowseSnapshot } : {}),
+              })
+            }
             conversationRef.current.push({ role: 'assistant', content: data.text })
             break
           }
