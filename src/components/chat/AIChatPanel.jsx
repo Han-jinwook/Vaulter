@@ -1715,7 +1715,7 @@ function ChatBubble({
                 )}
               </>
             )}
-            <div className="mt-3 ml-1 flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
+            <div className="mt-3 ml-1 grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-stretch">
               <label htmlFor={`acct-pick-${msg.id}`} className="sr-only">
                 목록에서 계정 선택
               </label>
@@ -1724,7 +1724,7 @@ function ChatBubble({
                 value={selectSyncedAccount}
                 onChange={(e) => setAccountInput(String(e.target.value))}
                 disabled={sortedAccountChoices.length === 0}
-                className="min-w-[11rem] shrink-0 truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[12rem]"
+                className="w-full min-w-0 truncate rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-1.5 text-xs font-semibold text-primary shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">목록에서 계정 선택</option>
                 {sortedAccountChoices.map((a) => (
@@ -1733,28 +1733,26 @@ function ChatBubble({
                   </option>
                 ))}
               </select>
-              <div className="flex min-w-0 flex-1 basis-0 grow items-center gap-2">
-                <input
-                  value={accountInput}
-                  onChange={(e) => setAccountInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && canSubmit) {
-                      onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
-                    }
-                  }}
-                  placeholder="새 계정명 입력"
-                  className="min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  onClick={() => onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())}
-                  disabled={!canSubmit}
-                  className="shrink-0 px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50"
-                >
-                  확인
-                </button>
-              </div>
+              <input
+                value={accountInput}
+                onChange={(e) => setAccountInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && canSubmit) {
+                    onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())
+                  }
+                }}
+                placeholder="새 계정명 입력"
+                className="w-full min-w-0 px-3 py-1.5 text-xs rounded-lg border border-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => onCompleteReview(String(msg.txId), effectiveCategory, accountInput.trim())}
+                disabled={!canSubmit}
+                className="w-full px-3 py-1.5 bg-primary text-white text-xs rounded-lg font-bold disabled:opacity-50 sm:w-auto sm:min-w-[3.5rem]"
+              >
+                확인
+              </button>
             </div>
           </>
         ) : (
