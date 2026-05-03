@@ -254,26 +254,6 @@ function isGenericLedgerCategory(category) {
   return GENERIC_LEDGER_CATEGORIES.has(String(category || '').trim())
 }
 
-function keywordCategorySuggestions(entry) {
-  const text = `${entry?.summary || ''} ${entry?.detail_memo || ''}`.toLowerCase()
-  if (/(축구|야구|농구|테니스|수영|헬스|필라테스|요가|운동|체육|클럽|레슨|월회비|회비)/.test(text)) {
-    return ['학원비', '건강체육비']
-  }
-  if (/(세탁|빨래|운동화|드라이|수선)/.test(text)) {
-    return ['세탁비', '생활비']
-  }
-  if (/(병원|약국|의원|치과|한의원|검진)/.test(text)) {
-    return ['의료비', '건강/병원']
-  }
-  if (/(택시|버스|지하철|주차|주유|하이패스|대리)/.test(text)) {
-    return ['교통비', '교통/차량']
-  }
-  if (/(카페|커피|식당|분식|김밥|국밥|치킨|피자|편의점|소주|맥주|밥|점심|저녁|아침)/.test(text)) {
-    return ['식비', '간식비']
-  }
-  return []
-}
-
 function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
   const scores = new Map()
   const merchant = String(entry?.summary || '').trim()
@@ -292,13 +272,23 @@ function buildCategoryOptionsForPendingEntry(entry, transactions = []) {
   const picked = [...scores.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
     .map(([category]) => ({ label: category, category }))
-  const seen = new Set(picked.map((opt) => opt.category))
-  for (const category of keywordCategorySuggestions(entry)) {
-    if (seen.has(category)) continue
-    picked.push({ label: category, category })
-    seen.add(category)
-  }
-  return picked.slice(0, 2)
+  if (picked.length > 0) return picked.slice(0, 1)
+
+  const suggested = Array.isArray(entry?.suggestedCategories)
+    ? entry.suggestedCategories
+    : Array.isArray(entry?.suggested_categories)
+      ? entry.suggested_categories
+      : []
+  const seen = new Set()
+  return suggested
+    .map((category) => String(category || '').trim())
+    .filter((category) => {
+      if (!category || isGenericLedgerCategory(category) || seen.has(category)) return false
+      seen.add(category)
+      return true
+    })
+    .slice(0, 2)
+    .map((category) => ({ label: category, category }))
 }
 
 /** 원장 "검토 필요" 클릭 → 동일 거래 채팅 블록으로 스크롤할 때 선택 (계정 선택 UI 우선) */
@@ -926,6 +916,7 @@ export default function AIChatPanel() {
               {
                 summary: out.summary.memo,
                 detail_memo: out.summary.detail_memo,
+                suggestedCategories: isGenericLedgerCategory(out.summary.category) ? [] : [out.summary.category],
               },
               transactions,
             ),
@@ -1647,6 +1638,7 @@ function ChatBubble({
     const pendingCategoryEntry = {
       summary: tx?.name || tx?.merchant || '',
       detail_memo: tx?.userMemo || '',
+      suggestedCategories: isGenericLedgerCategory(tx?.category) || !tx?.category ? [] : [tx.category],
     }
     const computedCategoryOptions = buildCategoryOptionsForPendingEntry(pendingCategoryEntry, transactions)
     const mergedCategoryOptions = (() => {

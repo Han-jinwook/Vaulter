@@ -41,6 +41,28 @@ const ADD_LEDGER_ALL_CATEGORIES = [...ADD_LEDGER_EXPENSE_CATEGORIES, ...ADD_LEDG
 const EXPENSE_CATEGORY_SET = new Set(ADD_LEDGER_EXPENSE_CATEGORIES)
 const INCOME_CATEGORY_SET = new Set(ADD_LEDGER_INCOME_CATEGORIES)
 const GENERIC_CATEGORY_SET = new Set(['기타', '기타 지출', '기타 수입'])
+const COMMON_CATEGORY_CANDIDATES = [
+  '식비',
+  '카페/간식',
+  '생활용품',
+  '교통비',
+  '차량유지비',
+  '쇼핑',
+  '의료비',
+  '건강체육비',
+  '학원비',
+  '교육비',
+  '문화여가',
+  '구독료',
+  '세탁비',
+  '미용비',
+  '경조사',
+  '주거비',
+  '통신비',
+  '공과금',
+  '세금',
+  '보험료',
+]
 
 function addLedgerCategoryEnumBlock() {
   return `【add_ledger_entry — 카테고리 고정 Enum(반드시 이 명칭만)】
@@ -89,6 +111,8 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
 - 단, 현재 유저 원장에 이미 존재하는 분류도 사용할 수 있다: ${categoryHint}
 - 같은 상호/비슷한 거래가 기존 원장에 있으면 기존 분류를 우선 재사용한다. 예: 같은 세탁소가 과거에 "세탁비"였으면 새 거래도 "세탁비" 후보로 본다.
 - 확신이 없으면 "기타 지출/기타 수입"으로 때우지 말고 category=null, missing_fields에 "category"를 넣어라. 앱이 후보 칩 2개와 직접 입력창을 보여준다.
+- category=null인 경우에도 category_candidates에는 가장 그럴듯한 후보 2개를 넣어라. 후보는 현재 유저 원장 분류 또는 범용 후보 풀에서 고른다.
+- 범용 후보 풀: ${COMMON_CATEGORY_CANDIDATES.join(', ')}
 
 [계정(account) 처리]
 - 유저가 결제수단/입금계좌를 말하지 않으면 account=null
@@ -117,6 +141,7 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
     "account": "계정명 또는 null",
     "memo": "선택 메모 또는 null"
   },
+  "category_candidates": ["후보1", "후보2"],
   "cfo_message": "is_complete=false면 누락 질문, true면 팩트라인+CFO 코멘트"
 }`
 }
@@ -142,6 +167,7 @@ function normalizeStructuredResult(raw, today, existingCategories = []) {
       account: null,
       memo: null,
     },
+    category_candidates: [],
     cfo_message: '거래 기록을 위해 날짜·금액·적요·계정을 알려 주세요.',
   }
   if (!raw || typeof raw !== 'object') return fallback
@@ -164,6 +190,12 @@ function normalizeStructuredResult(raw, today, existingCategories = []) {
   const normalizedAmount = Number.isFinite(amount) ? amount : 0
   const normalizedSummary = summaryText || null
   const normalizedAccount = accountText || null
+  const categoryCandidates = Array.isArray(raw.category_candidates)
+    ? raw.category_candidates
+        .map((x) => String(x || '').trim())
+        .filter((x) => x && !GENERIC_CATEGORY_SET.has(x))
+        .slice(0, 2)
+    : []
 
   const missing = []
   if (!knownCategory) missing.push('category')
@@ -205,6 +237,7 @@ function normalizeStructuredResult(raw, today, existingCategories = []) {
       account: normalizedAccount,
       memo: memoText || null,
     },
+    category_candidates: categoryCandidates,
     cfo_message: cfoMessage,
   }
 }
@@ -968,6 +1001,9 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
                 summary: d.summary,
                 detail_memo: d.memo || '',
                 account: d.account || '',
+                suggestedCategories: Array.isArray(structured.category_candidates)
+                  ? structured.category_candidates.slice(0, 2)
+                  : [],
               },
             })
           }
