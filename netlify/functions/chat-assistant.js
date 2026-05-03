@@ -69,6 +69,8 @@ function buildStructuredParseSystemPrompt(today, accounts) {
 [판별 규칙]
 - 새 거래 기록 의도(기록/입력/써줘/지출했다/입금됐다 등)이면 is_financial_data=true
 - 조회/수정/삭제/집계/차트 요청, 일반 대화, 감탄문이면 is_financial_data=false
+- 최근 대화가 함께 제공되면, 사용자의 마지막 말이 직전 누락 질문에 대한 보완 답변일 수 있다. 이 경우 같은 거래의 이전 정보와 마지막 답변을 합쳐서 판단한다.
+- 예: "삼일 전에 편의점에서 소주 2병 샀어" → assistant가 금액/분류 질문 → "5200원이고 식비" 라면 summary=편의점, memo=소주 2병, amount=5200, category=식비로 완성한다. 이미 이전에 나온 적요/품목을 다시 묻지 않는다.
 
 [기록 필수 3요소 + 선택 1요소]
 - 필수: category(분류), summary(적요), amount(금액)
@@ -92,6 +94,10 @@ ${ADD_LEDGER_ALL_CATEGORIES.join(', ')}
 [날짜(date)]
 - 형식: YYYY-MM-DD
 - 텍스트에 날짜가 없으면 오늘(${today})을 사용
+
+[summary/memo 분리]
+- summary는 가맹·장소 우선이다. "편의점에서 소주 2병"이면 summary="편의점", memo="소주 2병".
+- 사용자가 후속 답변에서 "소주 2병이라니까"처럼 품목만 다시 말하면, 이전 대화의 장소/날짜/금액/분류와 합친다.
 
 [응답 JSON 스키마]
 {
@@ -196,7 +202,25 @@ function normalizeStructuredResult(raw, today) {
   }
 }
 
-async function runStructuredEntryParser(apiKey, userText, dbContext) {
+function buildStructuredEntryUserContent(messages, userText) {
+  const recent = Array.isArray(messages)
+    ? messages
+        .slice(-8)
+        .map((m) => {
+          if (!m || typeof m !== 'object') return null
+          if (m.role !== 'user' && m.role !== 'assistant') return null
+          const content = typeof m.content === 'string' ? m.content.trim() : ''
+          if (!content) return null
+          return `${m.role === 'user' ? '사용자' : '비서'}: ${content}`
+        })
+        .filter(Boolean)
+    : []
+  const latest = String(userText || '').trim()
+  if (recent.length === 0) return latest.slice(0, 4000)
+  return `최근 대화(같은 거래의 누락 정보 보완일 수 있음):\n${recent.join('\n')}\n\n마지막 사용자 발화:\n${latest}`.slice(0, 4000)
+}
+
+async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessages = []) {
   const today = todayIsoDate()
   const accounts = Array.isArray(dbContext?.accounts)
     ? dbContext.accounts.map((x) => String(x || '').trim()).filter(Boolean)
@@ -207,7 +231,7 @@ async function runStructuredEntryParser(apiKey, userText, dbContext) {
     temperature: 0,
     messages: [
       { role: 'system', content: buildStructuredParseSystemPrompt(today, accounts) },
-      { role: 'user', content: String(userText || '').slice(0, 4000) },
+      { role: 'user', content: buildStructuredEntryUserContent(recentMessages, userText) },
     ],
   }
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -905,7 +929,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
       routedIntent = route.intent || 'chat'
       intentOverrideMessage = buildIntentOverrideSystemMessage(routedIntent, latestUserText)
       if (route.intent === 'create_entry') {
-        const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext)
+        const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext, trimmedMessages)
         // 기록 의도로 라우팅된 턴은 반드시 "도구 호출 또는 누락 질문"으로만 종료한다.
         if (!structured || structured?.is_financial_data !== true) {
           return json(200, {
