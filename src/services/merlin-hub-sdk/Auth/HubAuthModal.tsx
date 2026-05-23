@@ -135,13 +135,13 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
               {/* 로고 & 타이틀 영역 */}
               <div className="flex flex-col items-center gap-3 mb-6">
                 <div className="space-y-1 text-center">
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center justify-center gap-2">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight flex flex-col sm:flex-row items-center justify-center gap-3">
                     <img
                       src={appLogoUrl}
                       alt={appName}
-                      className="h-32 w-auto object-contain"
+                      className="h-24 md:h-32 w-auto max-w-[200px] md:max-w-[250px] object-contain shrink"
                     />
-                    {title}
+                    <span className="shrink-0 whitespace-nowrap">{title}</span>
                   </h2>
                   <p className="mt-2 text-[15px] text-slate-400 font-bold tracking-tight flex items-center justify-center gap-1.5">
                     지금 바로 
