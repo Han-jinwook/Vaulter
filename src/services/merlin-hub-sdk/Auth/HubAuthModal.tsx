@@ -162,7 +162,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   value={inputEmail}
                   onChange={(e) => setInputEmail(e.target.value)}
                   placeholder="이메일 주소 입력 (example@email.com)"
-                  className="w-full h-16 bg-white border-2 border-slate-200 focus:border-blue-500 focus:bg-white focus:ring-8 focus:ring-blue-500/5 transition-all rounded-2xl text-[17px] md:text-xl font-bold px-6 text-center placeholder:text-slate-300 placeholder:font-medium outline-none"
+                  className="w-full h-16 bg-white border-2 border-slate-200 focus:border-blue-500 focus:bg-white focus:ring-8 focus:ring-blue-500/5 transition-all rounded-2xl text-[15px] sm:text-base font-bold px-6 text-center placeholder:text-slate-300 placeholder:font-medium outline-none"
                   required
                   autoFocus
                 />
