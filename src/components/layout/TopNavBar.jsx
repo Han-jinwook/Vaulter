@@ -15,6 +15,7 @@ import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupS
 import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
 import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
+import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
 
 const EMPTY_SNAPSHOT = {
   version: 1,
@@ -72,6 +73,9 @@ export default function TopNavBar() {
     setLastGmailSyncAt,
     clearGmailHistoryClearBadge,
     setDriveBackupState,
+    isHubAuthModalOpen,
+    openHubAuthModal,
+    closeHubAuthModal,
   } = useUIStore()
   const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
   const [resetState, setResetState] = useState('idle')
@@ -398,12 +402,18 @@ export default function TopNavBar() {
           executeGmailConnect()
         }}
       />
+      <HubAuthModal
+        isOpen={isHubAuthModalOpen}
+        onClose={closeHubAuthModal}
+        appName="금고지기"
+        appLogoUrl="/logo.png"
+      />
       <div className="w-full max-w-[1680px] mx-auto">
         <div className="flex justify-between items-center px-3 md:px-5 h-14 md:h-16">
           {/* Left: Logo + Desktop Nav */}
           <div className="flex items-center gap-3 md:gap-5 min-w-0">
-            <Link to="/" className="text-xl md:text-2xl font-black italic tracking-tight shrink-0 text-primary">
-              금고지기
+            <Link to="/" className="shrink-0 flex items-center">
+              <img src="/logo.png" alt="금고지기" className="h-7 md:h-9 object-contain" />
             </Link>
             <nav className="hidden md:flex items-center gap-4 text-sm font-medium tracking-tight">
               {navItems.map((item) => (
@@ -466,15 +476,12 @@ export default function TopNavBar() {
               <span className="material-symbols-outlined">notifications</span>
             </button>
 
-            <div
-              onClick={openSettingsModal}
-              className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 cursor-pointer transition-all bg-surface-container-high border-surface-container-lowest hover:ring-2 hover:ring-primary/20"
-              title="설정 열기"
-            >
-              <div className="w-full h-full flex items-center justify-center bg-primary/10">
-                <span className="material-symbols-outlined text-xl text-primary">person</span>
-              </div>
-            </div>
+            <HubProfileWidget 
+              onLoginClick={openHubAuthModal}
+              onProfileClick={openSettingsModal}
+              showNickname={false}
+              className="ml-1"
+            />
           </div>
         </div>
 
