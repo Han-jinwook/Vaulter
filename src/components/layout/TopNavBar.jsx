@@ -407,6 +407,16 @@ export default function TopNavBar() {
         onClose={closeHubAuthModal}
         appName="금고지기"
         appLogoUrl="/logo.png"
+        subtitle={
+          <div className="flex items-center gap-1.5 text-[15px] font-bold text-slate-500">
+            지금 바로 
+            <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-200/60">
+              <span className="material-symbols-outlined text-[16px]">toll</span>
+              무료 코인
+            </span>
+            받아 사용하세요
+          </div>
+        }
       />
       <div className="w-full max-w-[1680px] mx-auto">
         <div className="flex justify-between items-center px-3 md:px-5 h-14 md:h-16">
