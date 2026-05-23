@@ -15,7 +15,8 @@ import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupS
 import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
 import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
-import { HubProfileWidget, HubAuthModal, HubProfileModal } from '../../services/merlin-hub-sdk/react'
+import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
+import HubProfileModal from '../settings/HubProfileModal'
 
 const EMPTY_SNAPSHOT = {
   version: 1,

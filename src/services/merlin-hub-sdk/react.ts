@@ -30,7 +30,7 @@ export {
 
 // 3. Custom UI Components (표준 UI 부품)
 export { HubProfileWidget, HubAvatar } from './Session/HubProfileWidget';
-export { HubProfileModal } from './Session/HubProfileModal';
+export { HubProfileCard, HubNotificationCard, HubLogoutCard } from './Session/HubProfileCards';
 export { HubAuthModal } from './Auth/HubAuthModal';
 export { HubRegisterNudge } from './UI/HubRegisterNudge';
 export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
