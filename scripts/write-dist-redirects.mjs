@@ -22,6 +22,9 @@ const apiRedirects = [
   ['/api/webhook-receipt', '/.netlify/functions/webhook-receipt'],
   ['/api/webhook-ledger-pull', '/.netlify/functions/webhook-ledger-pull'],
   ['/api/webhook-auth-register', '/.netlify/functions/webhook-auth-register'],
+  ['/api/auth/*', 'https://os.sundreamer.app/api/auth/:splat'],
+  ['/api/wallet/*', 'https://os.sundreamer.app/api/wallet/:splat'],
+  ['/api/payment/*', 'https://os.sundreamer.app/api/payment/:splat'],
 ]
   .map(([from, to]) => `${from}  ${to}  200`)
   .join('\n')
