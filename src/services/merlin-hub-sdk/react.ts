@@ -11,9 +11,9 @@
 export { HubProvider, useHub } from './HubProvider';
 export { useHubSession } from './Session/useHubSession';
 export { useHubAuth } from './Auth/useHubAuth';
-// export { useHubPayment } from './Wallet/useHubPayment';
-// export { useHubNotifier } from './Notification/useHubNotifier';
-// export { useHubReferral } from './Referral/useHubReferral';
+export { useHubPayment } from './Wallet/useHubPayment';
+export { useHubNotifier } from './Notification/useHubNotifier';
+export { useHubReferral } from './Referral/useHubReferral';
 
 // 2. Core 로직 (클라이언트에서도 자주 쓰는 함수들)
 export { 
@@ -30,12 +30,14 @@ export {
 
 // 3. Custom UI Components (표준 UI 부품)
 export { HubProfileWidget, HubAvatar } from './Session/HubProfileWidget';
+export { HubProfileModal } from './Session/HubProfileModal';
 export { HubAuthModal } from './Auth/HubAuthModal';
-// export { HubRegisterNudge } from './UI/HubRegisterNudge';
-// export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
-// export { HubPurchaseWidget } from './Wallet/HubPurchaseWidget';
-// export { HubNotifier, showToast } from './Notification/HubNotifier';
-// export { HubReferralWidget } from './Referral/HubReferralWidget';
-// export { HubHistoryList } from './Referral/HubHistoryList';
-// export { HubShareButton } from './Referral/HubShareButton';
-// export { HubWelcomeNudge } from './UI/HubWelcomeNudge';
+export { HubRegisterNudge } from './UI/HubRegisterNudge';
+export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
+export { HubPurchaseWidget } from './Wallet/HubPurchaseWidget';
+export { HubNotifier, showToast } from './Notification/HubNotifier';
+export { HubReferralWidget } from './Referral/HubReferralWidget';
+export { HubHistoryList } from './Referral/HubHistoryList';
+export { HubShareButton } from './Referral/HubShareButton';
+export { HubShareSquare } from './Referral/HubShareSquare';
+export { HubWelcomeNudge } from './UI/HubWelcomeNudge';

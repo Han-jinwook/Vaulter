@@ -16,6 +16,7 @@
     "echarts": "^6.0.0",
     "echarts-for-react": "^3.0.6",
     "idb-keyval": "^6.2.2",
+    "lucide-react": "^1.16.0",
     "papaparse": "^5.5.3",
     "pdfjs-dist": "^5.6.205",
     "react": "^19.2.4",

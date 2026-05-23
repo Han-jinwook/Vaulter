@@ -245,9 +245,8 @@ export class MerlinHubClient {
     payMethodType: 'card' | 'phone';
     returnUrl: string;
   }) {
-    // const { requestKcpPayment } = await import('../Wallet/wallet');
-    // return requestKcpPayment(params);
-    return { success: false, error: 'Wallet module not loaded' };
+    const { requestKcpPayment } = await import('../Wallet/wallet');
+    return requestKcpPayment(params);
   }
 
   async sendNotification(params: any) {
@@ -264,5 +263,13 @@ export class MerlinHubClient {
     // 임시 구현: 실제 구현 시에는 auth.ts에 별도 함수를 만들거나 서버 호출
     console.log('[MerlinHubClient] registerReferrer requested:', code);
     return { success: true };
+  }
+
+  async getReferrals() {
+    const res = await hubFetch<{ success: boolean; referrals: any[] }>('/api/auth/referrals');
+    if (res.ok && res.data.success) {
+      return res.data.referrals;
+    }
+    return [];
   }
 }

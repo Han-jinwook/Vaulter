@@ -68,6 +68,9 @@ export function useHubAuth() {
       
       if (result.success) {
         setStatus('success');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('profileUpdated'));
+        }
         // 인증 성공 시 세션 동기화를 위해 약간의 지연 후 성공 처리
         return true;
       } else {

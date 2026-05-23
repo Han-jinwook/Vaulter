@@ -1,5 +1,5 @@
 /**
- * Version: v2.0.0
+ * Version: v2.0.1
  * Last Updated: 2026-05-23
  */
 import React, { useState, useRef, useEffect } from 'react';
@@ -167,9 +167,9 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   autoFocus
                 />
                 
-                {emailHistory.length > 0 && (
+                {emailHistory.filter(e => e !== inputEmail).length > 0 && (
                   <div className="flex flex-wrap gap-2 justify-center mt-1 animate-in fade-in duration-200">
-                    {emailHistory.map((email) => (
+                    {emailHistory.filter(e => e !== inputEmail).map((email) => (
                       <button
                         key={email}
                         type="button"
@@ -265,6 +265,19 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   {error}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 3단계: 성공 */}
+          {status === 'success' && (
+            <div className="w-full text-center space-y-6 animate-in zoom-in duration-300 py-8">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-green-50 text-green-500 rounded-full mb-2">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">인증 완료!</h3>
+                <p className="text-base text-slate-500 font-bold">로그인이 성공적으로 완료되었습니다.</p>
+              </div>
             </div>
           )}
 

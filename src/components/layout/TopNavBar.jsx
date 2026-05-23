@@ -15,7 +15,7 @@ import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupS
 import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
 import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
-import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
+import { HubProfileWidget, HubAuthModal, HubProfileModal } from '../../services/merlin-hub-sdk/react'
 
 const EMPTY_SNAPSHOT = {
   version: 1,
@@ -81,6 +81,7 @@ export default function TopNavBar() {
   const [resetState, setResetState] = useState('idle')
   const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
+  const [isHubProfileModalOpen, setIsHubProfileModalOpen] = useState(false)
   const resetTimeoutRef = useRef(null)
   const connectTimeoutRef = useRef(null)
   // DEV: 인스턴스 고유 ID (마운트 시 할당 → 중복 마운트 탐지용)
@@ -230,6 +231,16 @@ export default function TopNavBar() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    const handleOpenLoginModal = () => {
+      openHubAuthModal()
+    }
+    window.addEventListener('openLoginModal', handleOpenLoginModal)
+    return () => {
+      window.removeEventListener('openLoginModal', handleOpenLoginModal)
+    }
+  }, [openHubAuthModal])
 
   const executeGmailConnect = async () => {
     if (isConnectingGmail) return
@@ -407,6 +418,15 @@ export default function TopNavBar() {
         onClose={closeHubAuthModal}
         appName="금고지기"
         appLogoUrl="/logo.png"
+        onSuccess={() => {
+          setTimeout(() => {
+            closeHubAuthModal()
+          }, 1500)
+        }}
+      />
+      <HubProfileModal
+        isOpen={isHubProfileModalOpen}
+        onClose={() => setIsHubProfileModalOpen(false)}
       />
       <div className="w-full max-w-[1680px] mx-auto">
         <div className="flex justify-between items-center px-3 md:px-5 h-14 md:h-16">
@@ -490,7 +510,7 @@ export default function TopNavBar() {
             {/* 허브 통합 프로필 위젯 */}
             <HubProfileWidget 
               onLoginClick={openHubAuthModal}
-              onProfileClick={openSettingsModal} // 임시로 같은 설정창 연결 (추후 허브용 모달로 분리)
+              onProfileClick={() => setIsHubProfileModalOpen(true)}
               showNickname={false}
               className="ml-1"
             />

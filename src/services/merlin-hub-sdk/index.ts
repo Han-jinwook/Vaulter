@@ -26,14 +26,14 @@ export {
   getProfile 
 } from './Auth/auth';
 
-// 3. 지갑 및 과금 (서버 API Route에서 필수) - 아직 미복사
-// export { 
-//   getBalance, 
-//   getUserId, 
-//   useCredit, 
-//   getPricing, 
-//   processTransaction, 
-//   chargeDynamic, 
-//   getHistory,
-//   requestKcpPayment 
-// } from './Wallet/wallet';
+// 3. 지갑 및 과금 (서버 API Route에서 필수)
+export { 
+  getBalance, 
+  getUserId, 
+  useCredit, 
+  getPricing, 
+  processTransaction, 
+  chargeDynamic, 
+  getHistory,
+  requestKcpPayment 
+} from './Wallet/wallet';
