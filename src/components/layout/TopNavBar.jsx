@@ -63,7 +63,6 @@ const OAUTH_STEP_TIMEOUT_MS = 10_000
 export default function TopNavBar() {
   const location = useLocation()
   const {
-    openCreditModal,
     openSettingsModal,
     gmailSyncPhase,
     gmailConnectState,
@@ -424,14 +423,8 @@ export default function TopNavBar() {
             </nav>
           </div>
 
-          {/* Right: Credit + Actions */}
+          {/* Right: Actions */}
           <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
-            <button
-              onClick={openCreditModal}
-              className="hidden sm:inline-block px-3 md:px-4 py-1.5 rounded-full font-bold text-xs md:text-sm tabular-nums cursor-pointer transition-colors bg-surface-container text-primary hover:bg-surface-container-high"
-            >
-              1,250.3 C
-            </button>
 
             <button
               key={`gmail-connect-${connectState}`}

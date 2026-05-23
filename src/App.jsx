@@ -12,7 +12,6 @@ import AssetsPage from './pages/AssetsPage'
 import VaultPage from './pages/VaultPage'
 import OnboardingPage from './pages/OnboardingPage'
 import FileUploadOverlay from './components/upload/FileUploadOverlay'
-import CreditChargeModal from './components/credit/CreditChargeModal'
 import { getDriveBackupStatus, uploadRotatedBackup } from './lib/googleDriveSync'
 import { buildFullBackupSnapshot, buildLocalKvSnapshot } from './lib/backupSnapshot'
 import { readLocalVaultSnapshot, writeLocalVaultSnapshot } from './lib/localVaultPersistence'
@@ -59,7 +58,6 @@ function AppShell() {
   const { pathname } = useLocation()
   const {
     isUploadModalOpen,
-    isCreditModalOpen,
     isSettingsModalOpen,
     isChatPanelOpen,
     setGmailSyncState,
@@ -392,7 +390,6 @@ function AppShell() {
       </main>
 
       {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}
-      {isCreditModalOpen && <CreditChargeModal />}
       {isSettingsModalOpen && <SettingsModal />}
     </div>
   )
