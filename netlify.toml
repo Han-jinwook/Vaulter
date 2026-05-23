@@ -70,3 +70,21 @@
   to = "/.netlify/functions/webhook-auth-register"
   status = 200
 
+[[redirects]]
+  from = "/api/auth/*"
+  to = "https://os.sundreamer.app/api/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/wallet/*"
+  to = "https://os.sundreamer.app/api/wallet/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/payment/*"
+  to = "https://os.sundreamer.app/api/payment/:splat"
+  status = 200
+  force = true
+

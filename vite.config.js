@@ -13,5 +13,19 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     host: 'localhost',
+    proxy: {
+      '/api/auth': {
+        target: 'https://os.sundreamer.app',
+        changeOrigin: true,
+      },
+      '/api/wallet': {
+        target: 'https://os.sundreamer.app',
+        changeOrigin: true,
+      },
+      '/api/payment': {
+        target: 'https://os.sundreamer.app',
+        changeOrigin: true,
+      },
+    },
   },
 })
