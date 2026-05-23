@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { useVaultStore } from '../../stores/vaultStore'
@@ -16,7 +16,6 @@ import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googl
 import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
 import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
-import HubProfileModal from '../settings/HubProfileModal'
 
 const EMPTY_SNAPSHOT = {
   version: 1,
@@ -64,6 +63,7 @@ const OAUTH_STEP_TIMEOUT_MS = 10_000
 
 export default function TopNavBar() {
   const location = useLocation()
+  const navigate = useNavigate()
   const {
     openSettingsModal,
     gmailSyncPhase,
@@ -82,7 +82,6 @@ export default function TopNavBar() {
   const [resetState, setResetState] = useState('idle')
   const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
-  const [isHubProfileModalOpen, setIsHubProfileModalOpen] = useState(false)
   const resetTimeoutRef = useRef(null)
   const connectTimeoutRef = useRef(null)
   // DEV: 인스턴스 고유 ID (마운트 시 할당 → 중복 마운트 탐지용)
@@ -425,10 +424,6 @@ export default function TopNavBar() {
           }, 1500)
         }}
       />
-      <HubProfileModal
-        isOpen={isHubProfileModalOpen}
-        onClose={() => setIsHubProfileModalOpen(false)}
-      />
       <div className="w-full max-w-[1680px] mx-auto">
         <div className="flex justify-between items-center px-3 md:px-5 h-14 md:h-16">
           {/* Left: Logo + Desktop Nav */}
@@ -511,7 +506,7 @@ export default function TopNavBar() {
             {/* 허브 통합 프로필 위젯 */}
             <HubProfileWidget 
               onLoginClick={openHubAuthModal}
-              onProfileClick={() => setIsHubProfileModalOpen(true)}
+              onProfileClick={() => navigate('/p-settings')}
               showNickname={false}
               className="ml-1"
             />
