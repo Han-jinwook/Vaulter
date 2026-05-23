@@ -11,7 +11,7 @@ interface HubAuthModalProps {
   appName: string;
   appLogoUrl: string;
   title?: string;
-  subtitle?: React.ReactNode;
+  subtitleActionText?: string;
   onSuccess?: () => void;
 }
 
@@ -26,7 +26,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
   appName,
   appLogoUrl,
   title = "시작하기",
-  subtitle,
+  subtitleActionText = "",
   onSuccess,
 }) => {
   const { status, sendOtp, verifyOtp, timer, formatTimer, error, reset } = useHubAuth();
@@ -139,15 +139,18 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                     <img
                       src={appLogoUrl}
                       alt={appName}
-                      className="h-16 md:h-20 w-auto object-contain"
+                      className="h-32 w-auto object-contain"
                     />
                     {title}
                   </h2>
-                  <div className="mt-2 flex justify-center">
-                    {subtitle ? subtitle : (
-                      <p className="text-[15px] text-slate-400 font-bold tracking-tight">간편하게 시작해보세요</p>
-                    )}
-                  </div>
+                  <p className="mt-2 text-[15px] text-slate-400 font-bold tracking-tight flex items-center justify-center gap-1.5">
+                    지금 바로 
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-coins w-3.5 h-3.5"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+                      무료 코인
+                    </span> 
+                    받아 {subtitleActionText ? `${subtitleActionText} 사용하세요` : '사용하세요'}
+                  </p>
                 </div>
               </div>
 
@@ -159,7 +162,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   value={inputEmail}
                   onChange={(e) => setInputEmail(e.target.value)}
                   placeholder="이메일 주소 입력 (example@email.com)"
-                  className="w-full h-16 bg-white border-2 border-slate-200 focus:border-blue-500 focus:bg-white focus:ring-8 focus:ring-blue-500/5 transition-all rounded-2xl text-[17px] md:text-xl font-bold px-6 text-center placeholder:text-slate-300 placeholder:font-medium placeholder:text-[15px] outline-none"
+                  className="w-full h-16 bg-white border-2 border-slate-200 focus:border-blue-500 focus:bg-white focus:ring-8 focus:ring-blue-500/5 transition-all rounded-2xl text-[17px] md:text-xl font-bold px-6 text-center placeholder:text-slate-300 placeholder:font-medium outline-none"
                   required
                   autoFocus
                 />
