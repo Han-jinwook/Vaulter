@@ -268,65 +268,88 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
 };
 
 // -----------------------------------------
-// 2. HubNotificationCard (중단 섹션: 공통 알림)
+// 2. HubNotificationCard (중단 섹션: 스마트 알림 설정)
 // -----------------------------------------
 export interface HubNotificationCardProps {
+  title?: string;
+  toggleLabel?: string;
+  description?: React.ReactNode;
+  enabled?: boolean;
+  onChange?: (enabled: boolean) => void;
   className?: string;
-  children?: React.ReactNode; // 커스텀 알림(어그로필터 등)을 붙일 수 있도록
+  children?: React.ReactNode;
 }
 
-export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({ className = '', children }) => {
+export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({
+  title = '알림 설정',
+  toggleLabel = '🔔 스마트 알림',
+  description = '허브 서비스의 새로운 기능과 혜택 알림을 관리합니다.',
+  enabled,
+  onChange,
+  className = '',
+  children
+}) => {
   const { isLoggedIn } = useHub();
-  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [internalEnabled, setInternalEnabled] = useState(false);
 
   useEffect(() => {
-    // 로컬 스토리지 또는 백엔드 연동으로 대체 가능
-    const stored = localStorage.getItem('hubMarketingConsent');
-    if (stored === 'true') setMarketingConsent(true);
-  }, []);
+    if (enabled === undefined) {
+      const stored = localStorage.getItem('hubSmartNotification') || localStorage.getItem('hubMarketingConsent');
+      if (stored === 'true') setInternalEnabled(true);
+    }
+  }, [enabled]);
+
+  const isToggled = enabled !== undefined ? enabled : internalEnabled;
 
   const handleToggle = () => {
-    const nextVal = !marketingConsent;
-    setMarketingConsent(nextVal);
-    localStorage.setItem('hubMarketingConsent', nextVal ? 'true' : 'false');
+    const nextVal = !isToggled;
+    if (onChange) {
+      onChange(nextVal);
+    } else {
+      setInternalEnabled(nextVal);
+      localStorage.setItem('hubSmartNotification', nextVal ? 'true' : 'false');
+      localStorage.setItem('hubMarketingConsent', nextVal ? 'true' : 'false');
+    }
   };
 
   return (
     <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden ${className}`}>
       <div className="p-6 sm:p-8">
-        <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 mb-2">
+        <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 mb-6">
           <Bell className="h-5 w-5" />
-          공통 알림 설정
+          {title}
         </h2>
-        <p className="text-sm text-slate-500 mb-6">
-          허브 서비스의 새로운 기능과 혜택 알림을 관리합니다.
-        </p>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-            <div>
-              <p className="text-sm font-bold text-slate-900">프로모션 및 혜택 알림 수신 동의</p>
-              <p className="text-xs text-slate-500 mt-1">
-                코인 충전 보너스 및 신규 패밀리 앱 론칭 시 알려드립니다.
-              </p>
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="min-w-0 pr-4">
+              <p className="text-sm font-bold text-slate-900">{toggleLabel}</p>
+              {typeof description === 'string' ? (
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  {description}
+                </p>
+              ) : (
+                <div className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  {description}
+                </div>
+              )}
             </div>
             <button
               onClick={handleToggle}
               disabled={!isLoggedIn}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                 !isLoggedIn ? 'bg-slate-200 cursor-not-allowed opacity-50' :
-                marketingConsent ? 'bg-blue-600' : 'bg-slate-200'
+                isToggled ? 'bg-blue-600' : 'bg-slate-200'
               }`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  marketingConsent ? 'translate-x-6' : 'translate-x-1'
+                  isToggled ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>
           </div>
 
-          {/* 개별 앱의 고유 알림 설정 UI가 들어갈 자리 */}
           {children && (
             <div className="pt-4 border-t border-slate-100 mt-4">
               {children}
@@ -337,6 +360,7 @@ export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({ classN
     </div>
   );
 };
+
 
 // -----------------------------------------
 // 3. HubLogoutCard (하단 섹션: 로그아웃)
