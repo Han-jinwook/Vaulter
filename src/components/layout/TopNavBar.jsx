@@ -40,7 +40,6 @@ export default function TopNavBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const {
-    openSettingsModal,
     gmailSyncPhase,
     gmailConnectState,
     lastGmailSyncAt,
@@ -367,15 +366,7 @@ export default function TopNavBar() {
               )}
             </button>
 
-            {location.pathname !== '/p-settings' && (
-              <button
-                onClick={openSettingsModal}
-                className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10"
-                title="설정"
-              >
-                <span className="material-symbols-outlined">settings</span>
-              </button>
-            )}
+
 
 
 
