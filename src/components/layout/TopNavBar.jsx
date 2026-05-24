@@ -5,37 +5,12 @@ import { useVaultStore } from '../../stores/vaultStore'
 import GoogleConnectModal from '../google/GoogleConnectModal'
 import { getGoogleIntegrationStatus } from '../../lib/googleIntegration'
 import {
-  clearGmailSyncTestData,
   clearStoredGmailAuth,
   ensureGmailAccessToken,
   setDigestHourPreference,
   validateGmailReadonlyAccess,
 } from '../../lib/gmailSync'
-import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupSnapshot'
-import { disconnectDriveBackupVault, uploadRotatedBackup } from '../../lib/googleDriveSync'
-import { clearLocalVaultSnapshot, writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
-import { useAssetStore } from '../../stores/assetStore'
 import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
-
-const EMPTY_SNAPSHOT = {
-  version: 1,
-  exportedAt: '',
-  transactions: [],
-  messages: [],
-  assetMessages: [],
-  budgetMessages: [],
-  vaultMessages: [],
-  secretVaultDocuments: [],
-  knownAccounts: [],
-  lastLedgerDecision: null,
-  ledgerContextTitle: '데이터 원장 (전체)',
-  activeLedgerFilter: 'all',
-  ledgerPeriodPreset: { kind: 'all' },
-  ledgerAccountFilter: null,
-  ledgerCategoryFilter: null,
-  reviewPinnedTxIds: [],
-  goldenAssetLines: [],
-}
 
 // DEV-only: 각 TopNavBar 인스턴스에 고유 ID를 부여해서 중복 마운트를 즉시 탐지한다
 let _instanceCounter = 0
@@ -72,17 +47,13 @@ export default function TopNavBar() {
     setGmailConnectState,
     setGmailSyncState,
     setLastGmailSyncAt,
-    clearGmailHistoryClearBadge,
     setDriveBackupState,
     isHubAuthModalOpen,
     openHubAuthModal,
     closeHubAuthModal,
   } = useUIStore()
-  const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
-  const [resetState, setResetState] = useState('idle')
   const [toast, setToast] = useState(null) // { type: 'success' | 'error', message: string }
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false)
-  const resetTimeoutRef = useRef(null)
   const connectTimeoutRef = useRef(null)
   // DEV: 인스턴스 고유 ID (마운트 시 할당 → 중복 마운트 탐지용)
   const instanceIdRef = useRef(null)
@@ -97,7 +68,6 @@ export default function TopNavBar() {
 
   const isConnectingGmail =
     connectState === 'requesting_auth' || connectState === 'verifying' || connectState === 'syncing'
-  const isClearingGmail = resetState === 'resetting'
 
   // setTimeout은 백그라운드 탭에서 스로틀될 수 있어 setInterval + performance.now() 폴링 방식으로 전환.
   // 1초 간격으로 경과 시간을 체크하기 때문에 OAuth 팝업이 포커스를 가져가도 비교적 안정적으로 발화한다.
@@ -211,12 +181,6 @@ export default function TopNavBar() {
   }, [connectLabel, connectState, gmailSyncPhase])
 
   useEffect(() => {
-    if (resetState !== 'error') return
-    const timer = window.setTimeout(() => setResetState('idle'), 4000)
-    return () => window.clearTimeout(timer)
-  }, [resetState])
-
-  useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(null), 3500)
     return () => window.clearTimeout(timer)
@@ -225,10 +189,6 @@ export default function TopNavBar() {
   useEffect(() => {
     return () => {
       clearConnectTimer()
-      if (resetTimeoutRef.current) {
-        window.clearTimeout(resetTimeoutRef.current)
-        resetTimeoutRef.current = null
-      }
     }
   }, [])
 
@@ -339,69 +299,6 @@ export default function TopNavBar() {
     }
   }
 
-  const handleResetAllData = async () => {
-    if (isClearingGmail) return
-    if (!window.confirm('모든 거래 내역, 메시지, 계좌 정보가 삭제됩니다.\n계속하시겠습니까?')) return
-    clearGmailHistoryClearBadge()
-    setToast(null)
-    setResetState('resetting')
-    let settled = false
-    if (resetTimeoutRef.current) {
-      window.clearTimeout(resetTimeoutRef.current)
-      resetTimeoutRef.current = null
-    }
-    resetTimeoutRef.current = window.setTimeout(() => {
-      if (settled) return
-      settled = true
-      setResetState('error')
-      setToast({ type: 'error', message: '초기화가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.' })
-    }, 8000)
-    try {
-      // 1) Drive가 연결돼 있으면 초기화 전 현재 상태를 'pre-reset' 태그 백업으로 먼저 저장
-      //    → 설정 > 백업 히스토리에서 복원 가능
-      const { driveBackupConnected } = useUIStore.getState()
-      if (driveBackupConnected) {
-        try {
-          await uploadRotatedBackup(buildFullBackupSnapshot(), 'pre-reset')
-        } catch (e) {
-          console.warn('[Reset] pre-reset backup failed (계속 진행)', e)
-        }
-      }
-      // 2) Drive 연결 해제 — 이후 원장 변경이 Drive로 자동 업로드되지 않도록
-      await disconnectDriveBackupVault()
-      setDriveBackupState('idle', '', false)
-      // 3) 인메모리 원장·황금자산 초기화 (Drive 이미 해제됐으므로 자동백업 안 됨)
-      restoreFromBackupSnapshot(EMPTY_SNAPSHOT)
-      await useAssetStore.getState().hydrateFromSnapshot([])
-      // 4) IndexedDB 정리: 로컬 스냅샷·자산 스토어, Gmail 기록, Gmail 토큰
-      await Promise.all([
-        clearLocalVaultSnapshot(),
-        clearGmailSyncTestData(false),
-        clearStoredGmailAuth(),
-      ])
-      await writeLocalVaultSnapshot(buildLocalKvSnapshot())
-      if (settled) return
-      settled = true
-      setLastGmailSyncAt(null)
-      setGmailConnectState('idle')
-      setGmailSyncState('idle', '')
-      setResetState('idle')
-      setToast({ type: 'success', message: '전체 데이터 초기화 완료 (Gmail·Drive 연동 해제됨)' })
-    } catch (error) {
-      if (settled) return
-      settled = true
-      setResetState('error')
-      setToast({
-        type: 'error',
-        message: error instanceof Error ? error.message : '데이터 초기화 중 오류가 발생했습니다.',
-      })
-    } finally {
-      if (resetTimeoutRef.current) {
-        window.clearTimeout(resetTimeoutRef.current)
-        resetTimeoutRef.current = null
-      }
-    }
-  }
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -478,15 +375,7 @@ export default function TopNavBar() {
               <span className="material-symbols-outlined">settings</span>
             </button>
 
-            <button
-              onClick={handleResetAllData}
-              disabled={isClearingGmail}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 md:px-4 py-1.5 rounded-full font-bold text-xs md:text-sm cursor-pointer transition-colors bg-surface-container text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50"
-              title="전체 데이터 초기화 (원장·Gmail 기록)"
-            >
-              <span className="material-symbols-outlined text-base">delete_sweep</span>
-              전체 초기화
-            </button>
+
 
             <button className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10">
               <span className="material-symbols-outlined">notifications</span>
