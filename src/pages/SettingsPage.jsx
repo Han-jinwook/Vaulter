@@ -1,8 +1,20 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HubProfileCard, HubNotificationCard, HubLogoutCard } from '../services/merlin-hub-sdk/react'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  
+  const [enabled, setEnabled] = useState(() => {
+    const stored = localStorage.getItem('hubSmartNotification') || localStorage.getItem('hubMarketingConsent')
+    return stored === null ? true : stored === 'true'
+  })
+
+  const handleToggle = (nextVal) => {
+    setEnabled(nextVal)
+    localStorage.setItem('hubSmartNotification', nextVal ? 'true' : 'false')
+    localStorage.setItem('hubMarketingConsent', nextVal ? 'true' : 'false')
+  }
 
   return (
     <div className="-mx-4 md:-mx-8 px-4 md:px-8 py-6 min-h-full space-y-6 bg-surface text-on-surface animate-fade-in">
@@ -16,6 +28,8 @@ export default function SettingsPage() {
             title="알림 설정"
             toggleLabel="🔔 스마트 알림"
             description="볼트 서비스의 중요 혜택 및 허브 공통 기능/보너스 알림을 수신합니다."
+            enabled={enabled}
+            onChange={handleToggle}
           />
 
           {/* 3. 계정 로그아웃 카드 */}
