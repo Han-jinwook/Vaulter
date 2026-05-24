@@ -32,6 +32,17 @@ export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
       setLastDriveBackupAt(new Date(uploaded.modifiedTime).getTime())
       setDriveBackupState('success', '개인 백업금고 연결 및 초기 백업 완료', true)
       setGmailSyncState('success', 'Google 통합 연동 완료')
+      
+      try {
+        const registration = await navigator.serviceWorker?.ready
+        if (registration?.active) {
+          registration.active.postMessage({ type: 'SET_GMAIL_DIGEST_HOUR', payload: 20 })
+          registration.active.postMessage({ type: 'GMAIL_SYNC_TICK' })
+        }
+      } catch (swError) {
+        console.warn('[GoogleConnectModal] SW tick failed:', swError)
+      }
+
       onConnected?.()
       onClose?.()
     } catch (nextError) {

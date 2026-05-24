@@ -5,6 +5,7 @@ export const useUIStore = create((set) => ({
   isUploadModalOpen: false,
   isSettingsModalOpen: false,
   isHubAuthModalOpen: false,
+  isGoogleConnectModalOpen: false,
   isChatPanelOpen: true,
   isLeftExpanded: true,
   isChartMode: false,
@@ -27,6 +28,8 @@ export const useUIStore = create((set) => ({
   closeSettingsModal: () => set({ isSettingsModalOpen: false }),
   openHubAuthModal: () => set({ isHubAuthModalOpen: true }),
   closeHubAuthModal: () => set({ isHubAuthModalOpen: false }),
+  openGoogleConnectModal: () => set({ isGoogleConnectModalOpen: true }),
+  closeGoogleConnectModal: () => set({ isGoogleConnectModalOpen: false }),
   openChatPanel: () => set({ isChatPanelOpen: true }),
   closeChatPanel: () => set({ isChatPanelOpen: false }),
 

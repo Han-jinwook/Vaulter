@@ -165,16 +165,19 @@ export default function SettingsPage() {
               <div className="p-6 sm:p-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-2">로컬 앱 설정</h2>
                 <p className="text-sm text-slate-500 mb-6">
-                  구글 드라이브 백업 및 지기 Webhook 등 로컬 앱 환경 설정을 구성합니다.
+                  Google 계정 통합 연동(이메일 영수증 자동 수집 & 드라이브 백업) 및 단축어 Webhook 등 로컬 앱 환경 설정을 구성합니다.
                 </p>
 
                 <div className="space-y-4 mb-6">
                   <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
                     <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-slate-500">cloud_queue</span>
-                      <span className="text-sm font-semibold text-slate-700">Google Drive 백업</span>
+                      <span className="material-symbols-outlined text-slate-500 font-medium">google</span>
+                      <div>
+                        <span className="block text-sm font-semibold text-slate-700">Google 통합 연동</span>
+                        <span className="block text-xs text-slate-400 mt-0.5">이메일 영수증 자동 수집 & 구글 드라이브 백업</span>
+                      </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${driveBackupConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${driveBackupConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                       {driveBackupConnected ? '연결됨' : '미연결'}
                     </span>
                   </div>

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
+import { useHub } from './services/merlin-hub-sdk/react'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
 import AssetChatPanel from './components/chat/AssetChatPanel'
@@ -13,6 +14,7 @@ import VaultPage from './pages/VaultPage'
 import SettingsPage from './pages/SettingsPage'
 import OnboardingPage from './pages/OnboardingPage'
 import FileUploadOverlay from './components/upload/FileUploadOverlay'
+import GoogleConnectModal from './components/google/GoogleConnectModal'
 import { getDriveBackupStatus, uploadRotatedBackup } from './lib/googleDriveSync'
 import { buildFullBackupSnapshot, buildLocalKvSnapshot } from './lib/backupSnapshot'
 import { readLocalVaultSnapshot, writeLocalVaultSnapshot } from './lib/localVaultPersistence'
@@ -58,9 +60,15 @@ export default function App() {
 
 function AppShell() {
   const { pathname } = useLocation()
+  const { isLoggedIn, isLoading: isHubLoading } = useHub()
+  const [isBackupStatusLoaded, setIsBackupStatusLoaded] = useState(false)
   const {
     isUploadModalOpen,
     isSettingsModalOpen,
+    isGoogleConnectModalOpen,
+    closeGoogleConnectModal,
+    openGoogleConnectModal,
+    driveBackupConnected,
     isChatPanelOpen,
     setGmailSyncState,
     setLastGmailSyncAt,
@@ -211,6 +219,10 @@ function AppShell() {
         }
       } catch (error) {
         console.warn('[DriveBackup] status bootstrap failed', error)
+      } finally {
+        if (!cancelled) {
+          setIsBackupStatusLoaded(true)
+        }
       }
 
       let lastSerialized = toSnapshotKey(buildFullBackupSnapshot())
@@ -270,6 +282,18 @@ function AppShell() {
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
+
+  useEffect(() => {
+    if (isHubLoading || !isBackupStatusLoaded) return
+
+    if (isLoggedIn && !driveBackupConnected) {
+      const shownThisSession = sessionStorage.getItem('vaulter_google_prompt_shown')
+      if (shownThisSession !== 'true') {
+        openGoogleConnectModal()
+        sessionStorage.setItem('vaulter_google_prompt_shown', 'true')
+      }
+    }
+  }, [isLoggedIn, isHubLoading, isBackupStatusLoaded, driveBackupConnected, openGoogleConnectModal])
 
   useEffect(() => {
     const derivePhaseFromStatus = (text) => {
@@ -395,6 +419,15 @@ function AppShell() {
 
       {(isUploadModalOpen || isDragging) && <FileUploadOverlay />}
       {isSettingsModalOpen && <SettingsModal />}
+      {isGoogleConnectModalOpen && (
+        <GoogleConnectModal
+          isOpen={isGoogleConnectModalOpen}
+          onClose={closeGoogleConnectModal}
+          onConnected={() => {
+            closeGoogleConnectModal()
+          }}
+        />
+      )}
     </div>
   )
 }
