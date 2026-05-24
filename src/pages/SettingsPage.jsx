@@ -12,7 +12,11 @@ export default function SettingsPage() {
           <HubProfileCard onSuccess={(nickname) => console.log('Profile updated', nickname)} />
 
           {/* 2. 알림 설정 카드 */}
-          <HubNotificationCard />
+          <HubNotificationCard
+            title="알림 설정"
+            toggleLabel="🔔 스마트 알림"
+            description="볼트 서비스의 중요 혜택 및 허브 공통 기능/보너스 알림을 수신합니다."
+          />
 
           {/* 3. 계정 로그아웃 카드 */}
           <HubLogoutCard onLogout={() => navigate('/')} />
