@@ -368,18 +368,20 @@ function AppShell() {
         <div className="flex-grow min-w-0 flex flex-col gap-6">
           <Outlet />
         </div>
-        <div
-          className={
-            pathname === '/assets'
-              ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-amber-200/50 to-amber-100/30 border border-amber-300/40'
-              : pathname === '/budget'
-                ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-emerald-500/50 to-teal-600/30 border border-emerald-400/40'
-                : pathname === '/vault'
-                  ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-slate-600/50 to-slate-800/50 border border-slate-500/50'
-                  : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
-          }
-        />
-        {isChatPanelOpen &&
+        {pathname !== '/p-settings' && (
+          <div
+            className={
+              pathname === '/assets'
+                ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-amber-200/50 to-amber-100/30 border border-amber-300/40'
+                : pathname === '/budget'
+                  ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-emerald-500/50 to-teal-600/30 border border-emerald-400/40'
+                  : pathname === '/vault'
+                    ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-slate-600/50 to-slate-800/50 border border-slate-500/50'
+                    : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
+            }
+          />
+        )}
+        {isChatPanelOpen && pathname !== '/p-settings' &&
           (pathname === '/assets' ? (
             <AssetChatPanel />
           ) : pathname === '/budget' ? (
