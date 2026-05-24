@@ -367,13 +367,15 @@ export default function TopNavBar() {
               )}
             </button>
 
-            <button
-              onClick={openSettingsModal}
-              className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10"
-              title="설정"
-            >
-              <span className="material-symbols-outlined">settings</span>
-            </button>
+            {location.pathname !== '/p-settings' && (
+              <button
+                onClick={openSettingsModal}
+                className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10"
+                title="설정"
+              >
+                <span className="material-symbols-outlined">settings</span>
+              </button>
+            )}
 
 
 
@@ -381,16 +383,7 @@ export default function TopNavBar() {
               <span className="material-symbols-outlined">notifications</span>
             </button>
 
-            {/* 기존 설정 진입점 (구글 연동 등 보존용) */}
-            <div
-              onClick={openSettingsModal}
-              className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 cursor-pointer transition-all bg-surface-container-high border-surface-container-lowest hover:ring-2 hover:ring-primary/20"
-              title="로컬 앱 설정 (구글 연동 등)"
-            >
-              <div className="w-full h-full flex items-center justify-center bg-primary/10">
-                <span className="material-symbols-outlined text-xl text-primary">person</span>
-              </div>
-            </div>
+
 
             {/* 허브 통합 프로필 위젯 */}
             <HubProfileWidget 

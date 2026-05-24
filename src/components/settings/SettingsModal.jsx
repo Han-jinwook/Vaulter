@@ -13,7 +13,6 @@ import { clearStoredGmailAuth } from '../../lib/gmailSync'
 import { buildFullBackupSnapshot, buildLocalKvSnapshot } from '../../lib/backupSnapshot'
 import { writeLocalVaultSnapshot } from '../../lib/localVaultPersistence'
 import { useAssetStore } from '../../stores/assetStore'
-import { isVaultPinConfigured, setVaultPin, clearVaultPin } from '../../lib/vaultPinClient'
 import WebhookSettings from './WebhookSettings'
 
 function formatDateTime(timestamp) {
@@ -48,9 +47,6 @@ export default function SettingsModal() {
   const [backupHistory, setBackupHistory] = useState([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [restoringId, setRestoringId] = useState(null)
-  const [vaultPinInput, setVaultPinInput] = useState('')
-  const [vaultPinMsg, setVaultPinMsg] = useState('')
-  const [hasVaultPin, setHasVaultPin] = useState(() => isVaultPinConfigured())
   const [showAllBackupHistory, setShowAllBackupHistory] = useState(false)
   const PREVIEW_BACKUP_COUNT = 2
 
@@ -103,24 +99,7 @@ export default function SettingsModal() {
     }
   }
 
-  const handleBackupNow = async () => {
-    if (isBusy) return
-    setIsBusy(true)
-    setDriveBackupState('syncing', '개인 백업금고에 지금 백업하는 중...', driveBackupConnected)
-    try {
-      const snapshot = buildFullBackupSnapshot()
-      const uploaded = await uploadRotatedBackup(snapshot)
-      const backupAt = new Date(uploaded.modifiedTime).getTime()
-      setHasSnapshot(true)
-      setLastDriveBackupAt(backupAt)
-      setDriveBackupState('success', '개인 백업금고 수동 백업 완료', true)
-      await refreshHistory()
-    } catch (error) {
-      setDriveBackupState('error', error instanceof Error ? error.message : '수동 백업 중 오류가 발생했습니다.', driveBackupConnected)
-    } finally {
-      setIsBusy(false)
-    }
-  }
+
 
   const handleRestoreFrom = async (fileId, label) => {
     if (isBusy || restoringId) return
@@ -193,58 +172,7 @@ export default function SettingsModal() {
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 -mr-0.5 custom-scrollbar">
 
-        <div className="rounded-2xl bg-surface-container-low p-5 space-y-3 mb-4 border border-outline-variant/10">
-          <div className="text-sm font-bold text-on-surface">비밀금고 PIN</div>
-          <p className="text-xs text-on-surface-variant">
-            4~6자리 숫자. 등록 시 비밀금고 탭에 잠금이 적용됩니다. (서버·클라이언트는 동일 pepper로 해시; 환경변수{' '}
-            <code className="text-[11px]">VAULT_PIN_PEPPER</code> / <code className="text-[11px]">VITE_VAULT_PIN_PEPPER</code> 를 맞추세요)
-          </p>
-          {hasVaultPin && (
-            <p className="text-xs text-primary font-semibold">PIN이 등록된 상태입니다.</p>
-          )}
-          <div className="flex flex-wrap items-end gap-2">
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="new-password"
-              value={vaultPinInput}
-              onChange={(e) => setVaultPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="새 PIN (4~6자리)"
-              className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-outline-variant/20 text-sm bg-surface"
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                setVaultPinMsg('')
-                try {
-                  await setVaultPin(vaultPinInput)
-                  setVaultPinInput('')
-                  setHasVaultPin(true)
-                  setVaultPinMsg('저장되었습니다.')
-                } catch (e) {
-                  setVaultPinMsg(e instanceof Error ? e.message : '저장 실패')
-                }
-              }}
-              className="px-4 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm font-bold"
-            >
-              PIN 저장
-            </button>
-            {hasVaultPin && (
-              <button
-                type="button"
-                onClick={() => {
-                  clearVaultPin()
-                  setHasVaultPin(false)
-                  setVaultPinMsg('PIN을 제거했습니다.')
-                }}
-                className="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant border border-outline-variant/30"
-              >
-                PIN 제거
-              </button>
-            )}
-          </div>
-          {vaultPinMsg && <p className="text-xs text-on-surface-variant">{vaultPinMsg}</p>}
-        </div>
+
 
         <div className="mb-4">
           <WebhookSettings />
@@ -274,18 +202,11 @@ export default function SettingsModal() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={handleBackupNow}
-              disabled={isBusy || !driveBackupConnected}
-              className="flex-1 min-w-[180px] bg-primary text-white py-3 px-4 rounded-xl font-bold disabled:opacity-60"
-            >
-              지금 백업하기
-            </button>
-            <button
               onClick={handleDisconnect}
               disabled={isBusy || !driveBackupConnected}
-              className="flex-1 min-w-[180px] bg-white text-on-surface py-3 px-4 rounded-xl font-bold border border-outline-variant/20 disabled:opacity-60"
+              className="w-full bg-white text-on-surface py-3 px-4 rounded-xl font-bold border border-outline-variant/20 disabled:opacity-60 hover:bg-slate-50 transition-colors"
             >
-              연결 해제
+              구글 드라이브 연결 해제
             </button>
           </div>
         </div>

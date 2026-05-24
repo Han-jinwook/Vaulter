@@ -5,11 +5,6 @@ import { useUIStore } from '../../stores/uiStore'
 import { CHAT_PANEL_ASIDE_LAYOUT } from './chatPanelAsideLayout'
 import IsolatedChatComposer from './IsolatedChatComposer'
 import { MessageWithActionLinks } from './MessageWithActionLinks'
-import VaultLockScreen from './VaultLockScreen'
-import {
-  isVaultPinConfigured,
-  isVaultUnlockedThisSession,
-} from '../../lib/vaultPinClient'
 import { resolveApiUrl } from '../../lib/resolveApiUrl'
 
 const CTA_TAG = /\s*\[CTA:keeper\]\s*/i
@@ -46,12 +41,6 @@ export default function VaultChatPanel() {
   const addVaultChatMessage = useVaultStore((s) => s.addVaultChatMessage)
   const addSecretVaultDocument = useVaultStore((s) => s.addSecretVaultDocument)
   const setVaultTheaterRequest = useUIStore((s) => s.setVaultTheaterRequest)
-
-  const [pinError, setPinError] = useState('')
-  const [needsLock, setNeedsLock] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return isVaultPinConfigured() && !isVaultUnlockedThisSession()
-  })
 
   const [isThinking, setIsThinking] = useState(false)
   const [thinkingLabel, setThinkingLabel] = useState('…')
@@ -293,26 +282,6 @@ export default function VaultChatPanel() {
   onSendHandlerRef.current = runVaultChat
   const stableOnSend = useCallback((t) => onSendHandlerRef.current(t), [])
 
-  const onUnlocked = useCallback(() => {
-    setNeedsLock(false)
-    setPinError('')
-  }, [])
-
-  if (needsLock) {
-    return (
-      <aside
-        className={`${CHAT_PANEL_ASIDE_LAYOUT} mt-6 overflow-hidden rounded-t-3xl rounded-b-2xl border border-slate-800/80 bg-slate-950 shadow-[0_12px_48px_rgba(0,0,0,0.75)]`}
-      >
-        <VaultLockScreen
-          onUnlocked={onUnlocked}
-          onError={setPinError}
-          onOpenSettings={() => useUIStore.getState().openSettingsModal()}
-          errorMessage={pinError}
-        />
-      </aside>
-    )
-  }
-
   return (
     <aside
       className={`${CHAT_PANEL_ASIDE_LAYOUT} mt-6 bg-gradient-to-b from-slate-950 to-slate-900 backdrop-blur-xl rounded-t-3xl rounded-b-2xl shadow-[0_12px_48px_rgba(0,0,0,0.55)] border border-slate-800/80`}
@@ -336,19 +305,7 @@ export default function VaultChatPanel() {
             <span className="text-[10px] text-slate-500 font-medium shrink-0 tabular-nums">{headerDate}</span>
           )}
         </div>
-        {!isVaultPinConfigured() && (
-          <p className="text-[10px] text-slate-500 mt-2">
-            잠금을 켜려면{' '}
-            <button
-              type="button"
-              className="text-amber-600/90 underline"
-              onClick={() => useUIStore.getState().openSettingsModal()}
-            >
-              설정
-            </button>
-            에서 PIN을 등록하세요.
-          </p>
-        )}
+
       </div>
 
       <div

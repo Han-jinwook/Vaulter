@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { HubProfileCard, HubNotificationCard, HubLogoutCard } from '../services/merlin-hub-sdk/react'
+import { HubProfileCard, HubNotificationCard, HubLogoutCard, HubReferralWidget } from '../services/merlin-hub-sdk/react'
 
 // Stores and Libs for Data Reset (Danger Zone)
 import { useUIStore } from '../stores/uiStore'
@@ -46,8 +46,10 @@ export default function SettingsPage() {
     localStorage.setItem('hubMarketingConsent', nextVal ? 'true' : 'false')
   }
 
-  // Reset State (Danger Zone)
+  // Reset State (Danger Zone) & UI Store Actions
   const {
+    driveBackupConnected,
+    openSettingsModal,
     setDriveBackupState,
     setGmailConnectState,
     setGmailSyncState,
@@ -154,39 +156,78 @@ export default function SettingsPage() {
 
   return (
     <div className="-mx-4 md:-mx-8 px-4 md:px-8 py-6 min-h-full space-y-6 bg-surface text-on-surface animate-fade-in">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="space-y-6">
-          {/* 1. 프로필 관리 카드 */}
-          <HubProfileCard onSuccess={(nickname) => console.log('Profile updated', nickname)} />
+      <div className="max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          {/* Left Column */}
+          <div className="space-y-6">
+            {/* 로컬 앱 설정 카드 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 sm:p-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-2">로컬 앱 설정</h2>
+                <p className="text-sm text-slate-500 mb-6">
+                  구글 드라이브 백업 및 지기 Webhook 등 로컬 앱 환경 설정을 구성합니다.
+                </p>
 
-          {/* 2. 알림 설정 카드 */}
-          <HubNotificationCard
-            title="알림 설정"
-            toggleLabel="🔔 스마트 알림"
-            description="볼트 서비스의 중요 혜택 및 허브 공통 기능/보너스 알림을 수신합니다."
-            enabled={enabled}
-            onChange={handleToggle}
-          />
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-slate-500">cloud_queue</span>
+                      <span className="text-sm font-semibold text-slate-700">Google Drive 백업</span>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${driveBackupConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                      {driveBackupConnected ? '연결됨' : '미연결'}
+                    </span>
+                  </div>
+                </div>
 
-          {/* 3. 계정 로그아웃 카드 */}
-          <HubLogoutCard onLogout={() => navigate('/')} />
+                <button
+                  onClick={openSettingsModal}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-sm cursor-pointer animate-interactive"
+                >
+                  <span className="material-symbols-outlined text-base">settings</span>
+                  설정 열기
+                </button>
+              </div>
+            </div>
 
-          {/* 4. 위험 구역 (Danger Zone) 카드 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden">
-            <div className="p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-red-600 mb-2">위험 구역</h2>
-              <p className="text-sm text-slate-500 mb-6">
-                볼트 서비스의 모든 데이터(거래 내역, 메시지, 계좌 정보 등)를 영구적으로 삭제하고, Gmail 연동 및 백업 연동을 해제합니다.
-              </p>
+            {/* 친구 초대 보너스 위젯 */}
+            <HubReferralWidget />
+          </div>
 
-              <button
-                onClick={handleResetAllData}
-                disabled={resetState === 'resetting'}
-                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-red-50 border border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 hover:border-red-300 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-base">delete_sweep</span>
-                {resetState === 'resetting' ? '초기화 진행 중...' : '전체 데이터 초기화'}
-              </button>
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* 1. 프로필 관리 카드 */}
+            <HubProfileCard onSuccess={(nickname) => console.log('Profile updated', nickname)} />
+
+            {/* 2. 알림 설정 카드 */}
+            <HubNotificationCard
+              title="알림 설정"
+              toggleLabel="🔔 스마트 알림"
+              description="볼트 서비스의 중요 혜택 및 허브 공통 기능/보너스 알림을 수신합니다."
+              enabled={enabled}
+              onChange={handleToggle}
+            />
+
+            {/* 3. 계정 로그아웃 카드 */}
+            <HubLogoutCard onLogout={() => navigate('/')} />
+
+            {/* 4. 위험 구역 (Danger Zone) 카드 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden">
+              <div className="p-6 sm:p-8">
+                <h2 className="text-xl font-bold text-red-600 mb-2">위험 구역</h2>
+                <p className="text-sm text-slate-500 mb-6">
+                  볼트 서비스의 모든 데이터(거래 내역, 메시지, 계좌 정보 등)를 영구적으로 삭제하고, Gmail 연동 및 백업 연동을 해제합니다.
+                </p>
+
+                <button
+                  onClick={handleResetAllData}
+                  disabled={resetState === 'resetting'}
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-red-50 border border-red-200 text-red-600 font-bold rounded-xl hover:bg-red-100 hover:border-red-300 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base">delete_sweep</span>
+                  {resetState === 'resetting' ? '초기화 진행 중...' : '전체 데이터 초기화'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
