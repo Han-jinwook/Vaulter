@@ -42,8 +42,14 @@ export const HubShareSquare: React.FC<HubShareSquareProps> = ({
 
   useEffect(() => {
     const fetchInfo = async () => {
+      if (typeof window !== 'undefined') {
+        const localCode = localStorage.getItem('userReferralCode');
+        if (localCode) setInviteCode(localCode);
+      }
       const info = await getMyReferralInfo();
-      if (info) setInviteCode(info.code);
+      if (info?.code) {
+        setInviteCode(info.code);
+      }
     };
     fetchInfo();
   }, [getMyReferralInfo]);
@@ -57,7 +63,28 @@ export const HubShareSquare: React.FC<HubShareSquareProps> = ({
     if (typeof window === 'undefined') return;
     
     let shareUrl = '';
-    const base = customUrl || window.location.href;
+    let base = customUrl || window.location.href;
+    
+    try {
+      const urlObj = new URL(base);
+      // Private/internal pages shouldn't be shared. Redirect invitees to the root onboarding page.
+      const privatePaths = [
+        '/p-settings',
+        '/p-my-page',
+        '/p-notification',
+        '/p-history',
+        '/p-admin',
+        '/payment',
+        '/login'
+      ];
+      if (privatePaths.some(p => urlObj.pathname.startsWith(p))) {
+        urlObj.pathname = '/';
+        urlObj.search = '';
+      }
+      base = urlObj.toString();
+    } catch (e) {
+      // fallback
+    }
     
     if (inviteCode) {
       try {

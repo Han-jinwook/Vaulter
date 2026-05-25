@@ -26,11 +26,17 @@ export const HubReferralWidget: React.FC<HubReferralWidgetProps> = ({
 
   useEffect(() => {
     const fetchInfo = async () => {
+      if (typeof window !== 'undefined') {
+        const localCode = localStorage.getItem('userReferralCode');
+        if (localCode) setInviteCode(localCode);
+      }
       const info = await getMyReferralInfo();
-      if (info) setInviteCode(info.code);
+      if (info?.code) {
+        setInviteCode(info.code);
+      }
     };
     fetchInfo();
-  }, []);
+  }, [getMyReferralInfo]);
 
   const handleCopy = () => {
     if (!inviteCode) return;

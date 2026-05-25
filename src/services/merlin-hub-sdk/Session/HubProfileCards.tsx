@@ -290,12 +290,16 @@ export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({
   children
 }) => {
   const { isLoggedIn } = useHub();
-  const [internalEnabled, setInternalEnabled] = useState(false);
+  const [internalEnabled, setInternalEnabled] = useState(true);
 
   useEffect(() => {
     if (enabled === undefined) {
       const stored = localStorage.getItem('hubSmartNotification') || localStorage.getItem('hubMarketingConsent');
-      if (stored === 'true') setInternalEnabled(true);
+      if (stored === 'false') {
+        setInternalEnabled(false);
+      } else {
+        setInternalEnabled(true);
+      }
     }
   }, [enabled]);
 
@@ -388,8 +392,7 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, classNam
   return (
     <div className={`bg-white rounded-2xl shadow-sm border border-rose-100 overflow-hidden ${className}`}>
       <div className="p-6 sm:p-8">
-        <h2 className="text-xl font-bold text-slate-900 mb-2">계정</h2>
-        <p className="text-sm text-slate-500 mb-6">
+        <p className="text-sm text-slate-500 mb-4">
           로그아웃하면 메인 페이지로 이동합니다.
         </p>
 
