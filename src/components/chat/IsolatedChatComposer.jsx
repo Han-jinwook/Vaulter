@@ -1,16 +1,6 @@
 import { useRef, useCallback, useLayoutEffect, memo } from 'react'
 
 const variants = {
-  budget: {
-    wrap: 'p-3 pt-2 border-t border-slate-600/20 bg-[#0a0c12]/92 [contain:layout] isolate',
-    inner:
-      'flex items-end bg-[#0c1018] rounded-2xl px-3 py-1 border border-slate-600/30 shadow-[inset_0_1px_0_rgba(148,163,184,0.06)] focus-within:border-sky-500/45',
-    icon: 'pie_chart',
-    iconClass: "material-symbols-outlined text-sky-400/80 text-[16px] mr-2 shrink-0",
-    input:
-      'w-full bg-transparent border-none focus:ring-0 focus:outline-none text-sm py-2 text-slate-100/95 disabled:opacity-50',
-    btn: 'w-8 h-8 bg-gradient-to-br from-slate-500 to-sky-600 text-slate-50 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/50 hover:scale-105 transition-transform active:scale-95 shrink-0 border border-sky-400/25',
-  },
   coach: {
     wrap: 'p-3 pt-2 border-t border-emerald-500/12 bg-[#0a1010]/90 [contain:layout] isolate',
     inner:
@@ -54,7 +44,6 @@ const variants = {
 }
 
 const inputPlaceholder = {
-  budget: 'placeholder:text-slate-500/60',
   coach: 'placeholder:text-emerald-200/35',
   asset: 'placeholder:text-[#6b5f48]',
   keeper: 'placeholder:text-white/50',
@@ -70,13 +59,11 @@ function IsolatedChatComposer({ variant, disabled, thinkingLabel, idlePlaceholde
   const vKey =
     variant === 'asset'
       ? 'asset'
-      : variant === 'budget'
-        ? 'budget'
-        : variant === 'coach'
-          ? 'coach'
-          : variant === 'vault'
-            ? 'vault'
-            : 'keeper'
+      : variant === 'coach'
+        ? 'coach'
+        : variant === 'vault'
+          ? 'vault'
+          : 'keeper'
   const v = variants[vKey] || variants.keeper
 
   const inputRef = useRef(null)

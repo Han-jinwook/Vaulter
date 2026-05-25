@@ -6,7 +6,6 @@ import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/re
 const navItems = [
   { path: '/', desktopLabel: '지기(Keeper)', mobileLabel: '지기' },
   { path: '/assets', desktopLabel: '황금자산', mobileLabel: '자산' },
-  { path: '/budget', desktopLabel: '예산&목표', mobileLabel: '예산목표' },
   { path: '/vault', desktopLabel: '비밀금고', mobileLabel: '금고' },
 ]
 

@@ -4,11 +4,9 @@ import { useHub } from './services/merlin-hub-sdk/react'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
 import AssetChatPanel from './components/chat/AssetChatPanel'
-import BudgetChatPanel from './components/chat/BudgetChatPanel'
 import VaultChatPanel from './components/chat/VaultChatPanel'
 import SettingsModal from './components/settings/SettingsModal'
 import DashboardPage from './pages/DashboardPage'
-import BudgetPage from './pages/BudgetPage'
 import AssetsPage from './pages/AssetsPage'
 import VaultPage from './pages/VaultPage'
 import SettingsPage from './pages/SettingsPage'
@@ -36,7 +34,6 @@ function isNonEmpty(s) {
     (s?.transactions?.length ?? 0) > 0 ||
     (s?.messages?.length ?? 0) > 0 ||
     (s?.assetMessages?.length ?? 0) > 0 ||
-    (s?.budgetMessages?.length ?? 0) > 0 ||
     (s?.vaultMessages?.length ?? 0) > 0 ||
     (s?.secretVaultDocuments?.length ?? 0) > 0 ||
     (s?.goldenAssetLines?.length ?? 0) > 0
@@ -50,7 +47,6 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/assets" element={<AssetsPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
         <Route path="/vault" element={<VaultPage />} />
         <Route path="/p-settings" element={<SettingsPage />} />
       </Route>
@@ -176,7 +172,6 @@ function AppShell() {
               transactions,
               messages: [],
               assetMessages: [],
-              budgetMessages: [],
               vaultMessages: [],
               secretVaultDocuments: [],
               knownAccounts: [],
@@ -397,9 +392,7 @@ function AppShell() {
             className={
               pathname === '/assets'
                 ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-amber-200/50 to-amber-100/30 border border-amber-300/40'
-                : pathname === '/budget'
-                  ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-emerald-500/50 to-teal-600/30 border border-emerald-400/40'
-                  : pathname === '/vault'
+                : pathname === '/vault'
                     ? 'w-1.5 self-stretch rounded-full hidden lg:block shrink-0 bg-gradient-to-b from-slate-600/50 to-slate-800/50 border border-slate-500/50'
                     : 'w-1.5 self-stretch bg-surface-container rounded-full hidden lg:block shrink-0'
             }
@@ -408,8 +401,6 @@ function AppShell() {
         {isChatPanelOpen && pathname !== '/p-settings' &&
           (pathname === '/assets' ? (
             <AssetChatPanel />
-          ) : pathname === '/budget' ? (
-            <BudgetChatPanel />
           ) : pathname === '/vault' ? (
             <VaultChatPanel />
           ) : (

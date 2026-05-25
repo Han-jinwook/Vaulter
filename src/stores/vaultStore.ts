@@ -159,14 +159,7 @@ export type SecretVaultDocument = {
   memo: string
 }
 
-export type BudgetGoalItem = {
-  id: string
-  title: string
-  targetAmount: number
-  currentAmount: number
-  targetDate: string
-  createdAt: string
-}
+// 예산 관련 타입(BudgetGoalItem) 제거됨
 
 export type VaultBackupSnapshot = {
   version: number
@@ -186,10 +179,6 @@ export type VaultBackupSnapshot = {
   goldenAssetLines?: AssetLine[]
   /** 황금자산 탭 전용 채팅 (지기 messages 와 분리) */
   assetMessages?: ChatMessage[]
-  /** 예산&목표 탭 전용 채팅 (코치) */
-  budgetMessages?: ChatMessage[]
-  /** 예산&목표 저장 목표 카드 */
-  budgetGoals?: BudgetGoalItem[]
   /** 비밀금고 탭 전용 채팅 */
   vaultMessages?: ChatMessage[]
   /** 비밀금고 문서 메타(로컬) */
@@ -200,8 +189,6 @@ type VaultState = {
   transactions: VaultTransaction[]
   messages: ChatMessage[]
   assetMessages: ChatMessage[]
-  budgetMessages: ChatMessage[]
-  budgetGoals: BudgetGoalItem[]
   vaultMessages: ChatMessage[]
   secretVaultDocuments: SecretVaultDocument[]
   knownAccounts: string[]
@@ -280,13 +267,6 @@ type VaultState = {
   addChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   updateChatMessage: (id: number, patch: Partial<ChatMessage>) => void
   addAssetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
-  addBudgetChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
-  upsertBudgetGoal: (input: {
-    title: string
-    targetAmount: number
-    currentAmount?: number
-    targetDate?: string
-  }) => BudgetGoalItem
   addVaultChatMessage: (msg: Omit<Partial<ChatMessage>, 'id' | 'time'> & { text: string }) => void
   /** 원장 삭제 확인 칩 처리 후 버튼 숨김 */
   resolveLedgerDeleteConfirmMessage: (messageId: number) => void
@@ -662,15 +642,13 @@ function computeNextInternalId(
   transactions: VaultTransaction[],
   messages: ChatMessage[],
   assetMessages: ChatMessage[] = [],
-  budgetMessages: ChatMessage[] = [],
   vaultMessages: ChatMessage[] = [],
 ) {
   const txMax = transactions.reduce((max, tx) => Math.max(max, Number(tx.id) || 0), 0)
   const msgMax = messages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
   const assetMsgMax = assetMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
-  const budgetMsgMax = budgetMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
   const vaultMsgMax = vaultMessages.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0)
-  return Math.max(100, txMax, msgMax, assetMsgMax, budgetMsgMax, vaultMsgMax)
+  return Math.max(100, txMax, msgMax, assetMsgMax, vaultMsgMax)
 }
 
 function buildPendingTxFromParsed(input: {
@@ -929,8 +907,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   transactions: initialTransactions,
   messages: initialMessages,
   assetMessages: [],
-  budgetMessages: [],
-  budgetGoals: [],
   vaultMessages: [],
   secretVaultDocuments: [],
   knownAccounts: [],
@@ -1500,60 +1476,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }))
   },
 
-  addBudgetChatMessage: (msg) => {
-    set((s) => ({
-      budgetMessages: [
-        ...s.budgetMessages,
-        {
-          ...msg,
-          id: ++_id,
-          role: (msg.role as ChatRole) || 'ai',
-          type: (msg.type as ChatType) || 'text',
-          time: timeNow(),
-          createdAt: new Date().toISOString(),
-        } as ChatMessage,
-      ],
-    }))
-  },
-
-  upsertBudgetGoal: (input) => {
-    const title = String(input.title || '').trim() || '(목표)'
-    const targetAmount = Math.max(0, Math.round(Number(input.targetAmount) || 0))
-    const currentAmount = Math.max(0, Math.round(Number(input.currentAmount) || 0))
-    const targetDate = String(input.targetDate || '').trim()
-    const idKey = `${title.toLowerCase()}|${targetDate}`
-    let created: BudgetGoalItem = {
-      id: `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      title,
-      targetAmount,
-      currentAmount,
-      targetDate,
-      createdAt: new Date().toISOString(),
-    }
-    set((s) => {
-      const idx = s.budgetGoals.findIndex(
-        (g) => `${String(g.title || '').trim().toLowerCase()}|${String(g.targetDate || '').trim()}` === idKey,
-      )
-      if (idx < 0) {
-        created = { ...created }
-        return { budgetGoals: [created, ...s.budgetGoals] }
-      }
-      const prev = s.budgetGoals[idx]
-      created = {
-        ...prev,
-        title,
-        targetAmount,
-        currentAmount,
-        targetDate,
-      }
-      const next = [...s.budgetGoals]
-      next[idx] = created
-      return { budgetGoals: next }
-    })
-    void flushLocalVaultSnapshotToKv().catch(() => {})
-    return created
-  },
-
   addVaultChatMessage: (msg) => {
     set((s) => ({
       vaultMessages: [
@@ -1604,8 +1526,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       transactions: state.transactions,
       messages: state.messages,
       assetMessages: state.assetMessages,
-      budgetMessages: state.budgetMessages,
-      budgetGoals: state.budgetGoals,
       vaultMessages: state.vaultMessages,
       secretVaultDocuments: state.secretVaultDocuments,
       knownAccounts: state.knownAccounts,
@@ -1623,21 +1543,17 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const transactions = Array.isArray(snapshot?.transactions) ? snapshot.transactions : []
     const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : []
     const assetMessages = Array.isArray(snapshot?.assetMessages) ? snapshot.assetMessages : []
-    const budgetMessages = Array.isArray(snapshot?.budgetMessages) ? snapshot.budgetMessages : []
-    const budgetGoals = Array.isArray(snapshot?.budgetGoals) ? snapshot.budgetGoals : []
     const vaultMessages = Array.isArray(snapshot?.vaultMessages) ? snapshot.vaultMessages : []
     const secretVaultDocuments = Array.isArray(snapshot?.secretVaultDocuments)
       ? snapshot.secretVaultDocuments
       : []
     const knownAccounts = Array.isArray(snapshot?.knownAccounts) ? snapshot.knownAccounts : []
-    _id = computeNextInternalId(transactions, messages, assetMessages, budgetMessages, vaultMessages)
+    _id = computeNextInternalId(transactions, messages, assetMessages, vaultMessages)
 
     set({
       transactions,
       messages,
       assetMessages,
-      budgetMessages,
-      budgetGoals,
       vaultMessages,
       secretVaultDocuments,
       knownAccounts,

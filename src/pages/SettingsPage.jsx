@@ -17,7 +17,6 @@ const EMPTY_SNAPSHOT = {
   transactions: [],
   messages: [],
   assetMessages: [],
-  budgetMessages: [],
   vaultMessages: [],
   secretVaultDocuments: [],
   knownAccounts: [],

@@ -13,7 +13,6 @@ const routeRules = [
   { intent: 'open_keeper', pattern: /(지기|메인|홈|대시보드)/i, path: '/' },
   { intent: 'open_ledger', pattern: /(내역|원장|거래)/i, path: '/' },
   { intent: 'open_assets', pattern: /(자산|포트폴리오|황금자산)/i, path: '/assets' },
-  { intent: 'open_budget', pattern: /(예산|목표|플랜)/i, path: '/budget' },
   { intent: 'open_vault', pattern: /(비밀금고|증빙|계약서|보증서|문서)/i, path: '/vault' },
 ]
 
