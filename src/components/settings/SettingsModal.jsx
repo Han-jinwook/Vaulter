@@ -174,10 +174,6 @@ export default function SettingsModal() {
 
 
 
-        <div className="mb-4">
-          <WebhookSettings />
-        </div>
-
         <div className="rounded-2xl bg-surface-container-low p-5 space-y-4">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -280,6 +276,10 @@ export default function SettingsModal() {
             </div>
           </div>
         )}
+
+        <div className="mt-5 mb-1">
+          <WebhookSettings />
+        </div>
         </div>
       </div>
     </div>
