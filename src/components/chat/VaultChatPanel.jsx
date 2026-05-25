@@ -96,7 +96,6 @@ export default function VaultChatPanel() {
   }, [])
 
   useLayoutEffect(() => {
-    if (needsLock) return
     if (vaultMessages.length === 0) return
     const run = () => {
       scrollChatToBottom(false)
@@ -108,7 +107,7 @@ export default function VaultChatPanel() {
       requestAnimationFrame(run)
     })
     return () => cancelAnimationFrame(id)
-  }, [vaultMessages.length, scrollChatToBottom, syncHeaderDate, needsLock])
+  }, [vaultMessages.length, scrollChatToBottom, syncHeaderDate])
 
   useEffect(() => {
     if (loadingMoreRef.current && prevScrollHeightRef.current !== null) {
@@ -121,13 +120,12 @@ export default function VaultChatPanel() {
   }, [displayCount, syncHeaderDate])
 
   useEffect(() => {
-    if (needsLock) return
     const isNewMessage = vaultMessages.length > prevMsgCountRef.current
     prevMsgCountRef.current = vaultMessages.length
     if (!loadingMoreRef.current && (isNewMessage || isThinking)) {
       scrollChatToBottom(isNewMessage)
     }
-  }, [vaultMessages, isThinking, scrollChatToBottom, needsLock])
+  }, [vaultMessages, isThinking, scrollChatToBottom])
 
   const handleMsgScroll = useCallback(() => {
     const el = msgContainerRef.current
