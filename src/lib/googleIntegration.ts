@@ -9,6 +9,7 @@ import {
   DRIVE_SCOPE,
   getDriveBackupStatus,
   storeDriveAuth,
+  getStoredDriveAuth,
   type GoogleDriveAuthToken,
 } from './googleDriveSync'
 
@@ -103,4 +104,34 @@ export async function connectGoogleWorkspace(): Promise<{
 
     tokenClient.requestAccessToken()
   })
+}
+
+export async function fetchConnectedEmail(): Promise<string | null> {
+  const driveAuth = await getStoredDriveAuth()
+  if (driveAuth?.accessToken) {
+    try {
+      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: `Bearer ${driveAuth.accessToken}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.user?.emailAddress) return data.user.emailAddress
+      }
+    } catch {}
+  }
+
+  const gmailAuth = await getStoredGmailAuth()
+  if (gmailAuth?.accessToken) {
+    try {
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers: { Authorization: `Bearer ${gmailAuth.accessToken}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.emailAddress) return data.emailAddress
+      }
+    } catch {}
+  }
+
+  return null
 }

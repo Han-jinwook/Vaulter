@@ -100,7 +100,7 @@ function ensureGoogleIdentityScript(): Promise<void> {
   })
 }
 
-async function getStoredDriveAuth() {
+export async function getStoredDriveAuth() {
   return dbGet<GoogleDriveAuthToken | null>(KEY_DRIVE_AUTH)
 }
 

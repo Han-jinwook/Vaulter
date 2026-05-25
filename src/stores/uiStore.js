@@ -17,6 +17,7 @@ export const useUIStore = create((set) => ({
   driveBackupStatus: '',
   driveBackupConnected: false,
   lastDriveBackupAt: null,
+  connectedEmail: null,
   /** Gmail 기록 초기화 완료 배지 만료 시각(ms). remount에도 유지되도록 스토어에 둔다. */
   gmailHistoryClearedUntil: null,
 
@@ -57,6 +58,7 @@ export const useUIStore = create((set) => ({
       driveBackupConnected: typeof connected === 'boolean' ? connected : state.driveBackupConnected,
     })),
   setLastDriveBackupAt: (timestamp) => set({ lastDriveBackupAt: timestamp || null }),
+  setConnectedEmail: (email) => set({ connectedEmail: email || null }),
 
   markGmailHistoryClearComplete: (durationMs = 12000) =>
     set({ gmailHistoryClearedUntil: Date.now() + Math.max(3000, durationMs) }),

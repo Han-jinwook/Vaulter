@@ -48,6 +48,7 @@ export default function SettingsPage() {
   // Reset State (Danger Zone) & UI Store Actions
   const {
     driveBackupConnected,
+    connectedEmail,
     openSettingsModal,
     setDriveBackupState,
     setGmailConnectState,
@@ -162,7 +163,7 @@ export default function SettingsPage() {
             {/* 로컬 앱 설정 카드 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-6 sm:p-8">
-                <h2 className="text-xl font-bold text-slate-800 mb-2">로컬 앱 설정</h2>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">구글 연동 & 로컬 앱 연동</h2>
                 <p className="text-sm text-slate-500 mb-6">
                   Google 계정 통합 연동(이메일 영수증 자동 수집 & 드라이브 백업) 및 단축어 Webhook 등 로컬 앱 환경 설정을 구성합니다.
                 </p>
@@ -176,9 +177,14 @@ export default function SettingsPage() {
                         <span className="block text-xs text-slate-400 mt-0.5">이메일 영수증 자동 수집 & 구글 드라이브 백업</span>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${driveBackupConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-                      {driveBackupConnected ? '연결됨' : '미연결'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {driveBackupConnected && connectedEmail && (
+                        <span className="text-xs font-medium text-slate-500">{connectedEmail}</span>
+                      )}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${driveBackupConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                        {driveBackupConnected ? '연결됨' : '미연결'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

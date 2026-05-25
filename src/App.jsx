@@ -211,6 +211,14 @@ function AppShell() {
         if (!cancelled) {
           setDriveBackupState('idle', '', status.connected)
           setLastDriveBackupAt(status.lastBackupAt)
+          
+          if (status.connected) {
+            const { fetchConnectedEmail } = await import('./lib/googleIntegration')
+            const email = await fetchConnectedEmail()
+            if (email && !cancelled) {
+              useUIStore.getState().setConnectedEmail(email)
+            }
+          }
         }
       } catch (error) {
         console.warn('[DriveBackup] status bootstrap failed', error)

@@ -32,6 +32,7 @@ export default function SettingsModal() {
   const {
     closeSettingsModal,
     driveBackupConnected,
+    connectedEmail,
     driveBackupPhase,
     driveBackupStatus,
     lastDriveBackupAt,
@@ -182,9 +183,14 @@ export default function SettingsModal() {
                 Gmail 읽기 권한과 Google Drive 숨김 백업금고 상태를 여기서 확인할 수 있습니다.
               </div>
             </div>
-            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${driveBackupConnected ? 'bg-primary/10 text-primary' : 'bg-surface text-on-surface-variant'}`}>
-              {driveBackupConnected ? '연결됨' : '미연결'}
-            </span>
+            <div className="flex items-center gap-2">
+              {driveBackupConnected && connectedEmail && (
+                <span className="text-[11px] font-medium text-on-surface-variant">{connectedEmail}</span>
+              )}
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${driveBackupConnected ? 'bg-primary/10 text-primary' : 'bg-surface text-on-surface-variant'}`}>
+                {driveBackupConnected ? '연결됨' : '미연결'}
+              </span>
+            </div>
           </div>
 
           <div className="rounded-xl bg-white px-4 py-3 border border-outline-variant/15">

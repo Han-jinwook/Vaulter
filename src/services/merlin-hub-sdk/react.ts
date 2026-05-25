@@ -41,3 +41,5 @@ export { HubHistoryList } from './Referral/HubHistoryList';
 export { HubShareButton } from './Referral/HubShareButton';
 export { HubShareSquare } from './Referral/HubShareSquare';
 export { HubWelcomeNudge } from './UI/HubWelcomeNudge';
+export * from './Auth/HubBenefitModal';
+export { markFreeTrialCompleted, useBenefitTrigger } from './Auth/useBenefitTrigger';

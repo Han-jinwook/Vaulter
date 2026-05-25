@@ -6,7 +6,7 @@ import { buildFullBackupSnapshot } from '../../lib/backupSnapshot'
 import { uploadBackupSnapshot, validateDriveAppDataAccess } from '../../lib/googleDriveSync'
 
 export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
-  const { setDriveBackupState, setLastDriveBackupAt, setGmailSyncState } = useUIStore()
+  const { setDriveBackupState, setLastDriveBackupAt, setGmailSyncState, setConnectedEmail } = useUIStore()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,6 +32,14 @@ export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
       setLastDriveBackupAt(new Date(uploaded.modifiedTime).getTime())
       setDriveBackupState('success', '개인 백업금고 연결 및 초기 백업 완료', true)
       setGmailSyncState('success', 'Google 통합 연동 완료')
+      
+      try {
+        const { fetchConnectedEmail } = await import('../../lib/googleIntegration')
+        const email = await fetchConnectedEmail()
+        if (email) setConnectedEmail(email)
+      } catch (err) {
+        console.warn('이메일 주소 가져오기 실패', err)
+      }
       
       try {
         const registration = await navigator.serviceWorker?.ready
