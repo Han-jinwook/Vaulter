@@ -24,8 +24,8 @@ export default function AIBriefingCard() {
                 <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
               </div>
               <div>
-                <h2 className="font-bold text-lg">나의 꿈과 목표</h2>
-                <p className="text-[10px] text-outline font-medium">오늘도 한 걸음씩 쌓이는 금고 플랜</p>
+                <h2 className="font-bold text-lg">금고 브리핑</h2>
+                <p className="text-[10px] text-outline font-medium">현재 원장 기반 자금 흐름 요약</p>
               </div>
             </div>
             {/* 시각화 토글 버튼 — 우상단 */}
