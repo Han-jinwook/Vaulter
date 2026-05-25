@@ -184,7 +184,11 @@ async function ensureDriveAccessToken(interactive = false) {
     throw new Error('개인 백업금고가 아직 연결되지 않았습니다. 먼저 설정에서 연결해 주세요.')
   }
   if (token && !interactive) {
-    throw new Error('구글 연동 토큰이 만료되었습니다. 다시 연동해 주세요.')
+    window.dispatchEvent(
+      new CustomEvent('hub-toast', {
+        detail: { type: 'info', message: '구글 보안 정책에 따라 연동 토큰을 갱신합니다...' },
+      })
+    )
   }
   const refreshed = await requestDriveAccessToken(interactive)
   return refreshed.accessToken
