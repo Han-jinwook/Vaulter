@@ -20,9 +20,7 @@ IndexedDB 내에는 크게 3개의 Object Store가 존재하며, 역할에 따�
   - `exportedAt` (string): 마지막 내보내기/저장 시간
   - `messages` (Array): 메인 지기 탭의 AI 채팅 내역 (`ChatMessage` 객체)
   - `assetMessages` (Array): 황금자산 탭 전용 AI 채팅 내역
-  - `budgetMessages` (Array): 예산/목표 탭 전용 AI 채팅 내역
   - `vaultMessages` (Array): 비밀금고 탭 전용 AI 채팅 내역
-  - `budgetGoals` (Array): 유저가 설정한 예산 목표 카드들
   - `secretVaultDocuments` (Array): 비밀금고에 업로드된 문서 메타데이터
   - `knownAccounts` (Array): 유저가 사용해 본 계좌/카드 이름 목록 (드롭다운 자동완성용)
   - `activeLedgerFilter`, `ledgerPeriodPreset` 등: 원장 UI 필터링 및 뷰어 상태 유지용 필드들
