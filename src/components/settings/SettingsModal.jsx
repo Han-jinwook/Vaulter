@@ -33,6 +33,7 @@ export default function SettingsModal() {
     closeSettingsModal,
     driveBackupConnected,
     connectedEmail,
+    openGoogleConnectModal,
     driveBackupPhase,
     driveBackupStatus,
     lastDriveBackupAt,
@@ -202,7 +203,18 @@ export default function SettingsModal() {
             {statusText}
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-3">
+            {driveBackupPhase === 'error' && (
+              <button
+                onClick={() => {
+                  closeSettingsModal()
+                  openGoogleConnectModal()
+                }}
+                className="w-full bg-primary text-white py-3 px-4 rounded-xl font-bold hover:bg-primary-dim transition-colors"
+              >
+                구글 연동 다시 하기 (로그인)
+              </button>
+            )}
             <button
               onClick={handleDisconnect}
               disabled={isBusy || !driveBackupConnected}
