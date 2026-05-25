@@ -213,10 +213,15 @@ function AppShell() {
           setLastDriveBackupAt(status.lastBackupAt)
           
           if (status.connected) {
+            const cachedEmail = localStorage.getItem('vaulter_google_connected_email')
+            if (cachedEmail) {
+              useUIStore.getState().setConnectedEmail(cachedEmail)
+            }
             const { fetchConnectedEmail } = await import('./lib/googleIntegration')
             const email = await fetchConnectedEmail()
             if (email && !cancelled) {
               useUIStore.getState().setConnectedEmail(email)
+              localStorage.setItem('vaulter_google_connected_email', email)
             }
           }
         }

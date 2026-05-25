@@ -54,6 +54,7 @@ export default function SettingsPage() {
     setGmailConnectState,
     setGmailSyncState,
     setLastGmailSyncAt,
+    setConnectedEmail,
   } = useUIStore()
 
   const clearGmailHistoryClearBadge = useUIStore((s) => s.clearGmailHistoryClearBadge)
@@ -118,6 +119,8 @@ export default function SettingsPage() {
       // 2) Drive 연결 해제
       await disconnectDriveBackupVault()
       setDriveBackupState('idle', '', false)
+      setConnectedEmail(null)
+      localStorage.removeItem('vaulter_google_connected_email')
 
       // 3) 인메모리 원장·황금자산 초기화
       restoreFromBackupSnapshot(EMPTY_SNAPSHOT)

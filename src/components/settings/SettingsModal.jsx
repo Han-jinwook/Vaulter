@@ -42,6 +42,7 @@ export default function SettingsModal() {
     setGmailConnectState,
     setGmailSyncState,
     setLastGmailSyncAt,
+    setConnectedEmail,
   } = useUIStore()
   const restoreFromBackupSnapshot = useVaultStore((s) => s.restoreFromBackupSnapshot)
   const [isBusy, setIsBusy] = useState(false)
@@ -141,6 +142,8 @@ export default function SettingsModal() {
       setGmailSyncState('idle', '')
       setLastDriveBackupAt(null)
       setLastGmailSyncAt(null)
+      setConnectedEmail(null)
+      localStorage.removeItem('vaulter_google_connected_email')
     } catch (error) {
       setDriveBackupState('error', error instanceof Error ? error.message : '연결 해제 중 오류가 발생했습니다.', driveBackupConnected)
     } finally {

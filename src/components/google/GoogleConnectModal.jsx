@@ -36,7 +36,10 @@ export default function GoogleConnectModal({ isOpen, onClose, onConnected }) {
       try {
         const { fetchConnectedEmail } = await import('../../lib/googleIntegration')
         const email = await fetchConnectedEmail()
-        if (email) setConnectedEmail(email)
+        if (email) {
+          setConnectedEmail(email)
+          localStorage.setItem('vaulter_google_connected_email', email)
+        }
       } catch (err) {
         console.warn('이메일 주소 가져오기 실패', err)
       }
