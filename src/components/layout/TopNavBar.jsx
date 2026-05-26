@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useUIStore } from '../../stores/uiStore'
-import { HubProfileWidget, HubAuthModal } from '../../services/merlin-hub-sdk/react'
+import { HubProfileWidget, HubAuthModal, useHub } from '../../services/merlin-hub-sdk/react'
 
 const navItems = [
   { path: '/', desktopLabel: '지기(Keeper)', mobileLabel: '지기' },
@@ -12,6 +12,7 @@ const navItems = [
 export default function TopNavBar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { isLoggedIn, balance } = useHub()
   const {
     isHubAuthModalOpen,
     openHubAuthModal,
@@ -70,6 +71,16 @@ export default function TopNavBar() {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+            {isLoggedIn && (
+              <Link
+                to="/p-wallet"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200/60 text-amber-800 font-bold text-xs transition-colors shrink-0 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[14px] font-bold text-amber-600">payments</span>
+                <span>{balance !== null ? balance.toLocaleString() : '0'} C</span>
+              </Link>
+            )}
+
             <button className="p-2 rounded-full transition-all active:scale-95 text-on-surface-variant hover:bg-primary/10">
               <span className="material-symbols-outlined">notifications</span>
             </button>

@@ -11,6 +11,7 @@ import AssetsPage from './pages/AssetsPage'
 import VaultPage from './pages/VaultPage'
 import SettingsPage from './pages/SettingsPage'
 import OnboardingPage from './pages/OnboardingPage'
+import WalletPage from './pages/WalletPage'
 import FileUploadOverlay from './components/upload/FileUploadOverlay'
 import GoogleConnectModal from './components/google/GoogleConnectModal'
 import { getDriveBackupStatus, uploadRotatedBackup } from './lib/googleDriveSync'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/vault" element={<VaultPage />} />
         <Route path="/p-settings" element={<SettingsPage />} />
+        <Route path="/p-wallet" element={<WalletPage />} />
       </Route>
     </Routes>
   )
