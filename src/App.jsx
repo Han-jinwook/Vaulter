@@ -402,7 +402,7 @@ function AppShell() {
         <div className="flex-grow min-w-0 flex flex-col gap-6">
           <Outlet />
         </div>
-        {pathname !== '/p-settings' && (
+        {pathname !== '/p-settings' && pathname !== '/p-wallet' && (
           <div
             className={
               pathname === '/assets'
@@ -413,7 +413,7 @@ function AppShell() {
             }
           />
         )}
-        {isChatPanelOpen && pathname !== '/p-settings' &&
+        {isChatPanelOpen && pathname !== '/p-settings' && pathname !== '/p-wallet' &&
           (pathname === '/assets' ? (
             <AssetChatPanel />
           ) : pathname === '/vault' ? (
