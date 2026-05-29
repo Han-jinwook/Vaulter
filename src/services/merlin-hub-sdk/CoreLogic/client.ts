@@ -115,6 +115,10 @@ async function getTestSessionMock<T>(path: string, options: RequestInit): Promis
   // /api/wallet/history — 이용 내역 (로컬 API가 이미 Hub 연동형으로 바뀌었으므로, 직접 호출 시에도 로컬 연동 유지)
   if (path.startsWith('/api/wallet/history')) {
     try {
+      const appId = getConfig().appId;
+      if (!appId) {
+        throw new Error('[MerlinHubSDK] appId is not configured. Run configureMerlinHub({ appId: "..." }) first.');
+      }
       const res = await fetch(`/api/user/credit-history?userId=${TEST_USER_ID}`, { cache: 'no-store' });
       const data = await res.json();
       return {
@@ -122,7 +126,7 @@ async function getTestSessionMock<T>(path: string, options: RequestInit): Promis
         status: 200,
         data: {
           history: data,
-          app_id: getConfig().appId || 'DEFAULT_APP'
+          app_id: appId
         } as T,
       };
     } catch {
@@ -240,12 +244,40 @@ export class MerlinHubClient {
     const { verifyOTP } = await import('../Auth/auth');
     const { getConfig } = await import('./config');
     
-    // 로컬스토리지에서 초대코드 조회 후 파라미터 전달
+    // 로컬스토리지에서 초대코드 및 가불 정보 조회 후 파라미터 전달
     let referralCode = undefined;
+    let pendingUsageFee = undefined;
+    let pendingVideoId = undefined;
     if (typeof window !== 'undefined') {
       referralCode = localStorage.getItem('userReferralCode') || undefined;
+      const pendingUsageFeeStr = localStorage.getItem('pending_usage_fee');
+      pendingUsageFee = pendingUsageFeeStr ? parseInt(pendingUsageFeeStr, 10) : undefined;
+      pendingVideoId = localStorage.getItem('pending_video_id') || undefined;
     }
-    return verifyOTP(email, code, getConfig().appId, referralCode);
+    
+    const result = await verifyOTP(email, code, getConfig().appId, referralCode, pendingUsageFee, pendingVideoId);
+    
+    // 인증 성공 시 비회원 시절 데이터 마이그레이션 실행 및 로컬스토리지 정리
+    if (result.success && typeof window !== 'undefined') {
+      const resolvedUserId = result.userId || result.familyUid;
+      if (pendingVideoId && resolvedUserId) {
+        try {
+          await fetch('/api/analysis/link-guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: pendingVideoId, userId: resolvedUserId })
+          });
+          console.log(`[Success] Guest analysis ${pendingVideoId} linked to User ${resolvedUserId}`);
+        } catch (linkErr) {
+          console.error('[Error] Failed to link guest analysis:', linkErr);
+        }
+      }
+      localStorage.removeItem('pending_usage_fee');
+      localStorage.removeItem('pending_video_id');
+      localStorage.removeItem('pendingReferralCode');
+    }
+    
+    return result;
   }
 
   async preparePayment(params: {

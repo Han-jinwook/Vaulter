@@ -77,7 +77,7 @@ function normalizeDocumentItem(data: any, chunk: DocumentAnalysisChunk, index: n
   }
 }
 
-export async function analyzeDocumentWithGPT(imageFile: File): Promise<VisionParseResult> {
+export async function analyzeDocumentWithGPT(imageFile: File): Promise<{ data: VisionParseResult; usage?: any }> {
   const imageBase64 = await fileToBase64(imageFile)
   const mimeType = imageFile.type || 'image/jpeg'
 
@@ -102,20 +102,24 @@ export async function analyzeDocumentWithGPT(imageFile: File): Promise<VisionPar
   const data = payload?.data || payload
 
   return {
-    merchant: String(data?.merchant || '가맹점 미확인').trim(),
-    date: normalizeDate(data?.date),
-    amount: Number(data?.amount || 0),
-    category: String(data?.category || '기타').trim(),
-    reasoning: String(data?.reasoning || '').trim(),
-    confidence: Number(data?.confidence || 0.8),
+    data: {
+      merchant: String(data?.merchant || '가맹점 미확인').trim(),
+      date: normalizeDate(data?.date),
+      amount: Number(data?.amount || 0),
+      category: String(data?.category || '기타').trim(),
+      reasoning: String(data?.reasoning || '').trim(),
+      confidence: Number(data?.confidence || 0.8),
+    },
+    usage: payload?.usage
   }
 }
 
 export async function analyzeDocumentChunks(
   chunks: DocumentAnalysisChunk[],
   onProgress?: (completed: number, total: number) => void,
-): Promise<DocumentParseResult[]> {
+): Promise<{ results: DocumentParseResult[]; totalTokens: number }> {
   const results: DocumentParseResult[] = []
+  let totalTokens = 0
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i]
@@ -138,6 +142,11 @@ export async function analyzeDocumentChunks(
 
     const payload = await response.json()
     const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data?.items) ? payload.data.items : []
+    
+    if (payload?.usage?.total_tokens) {
+      totalTokens += payload.usage.total_tokens
+    }
+
     results.push(
       ...items
         .map((item: any, index: number) => normalizeDocumentItem(item, chunk, index))
@@ -146,6 +155,6 @@ export async function analyzeDocumentChunks(
     if (onProgress) onProgress(i + 1, chunks.length)
   }
 
-  return results
+  return { results, totalTokens }
 }
 

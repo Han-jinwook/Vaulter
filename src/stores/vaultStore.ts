@@ -1696,7 +1696,15 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   analyzeDocumentWithVision: async (documentId, file, fileType) => {
-    const parsed = await analyzeDocumentWithGPT(file)
+    // 1. 비회원 체크
+    const isLoggedIn = localStorage.getItem('merlin_session_token') || localStorage.getItem('merlin_user_id')
+    const hasCompletedTrial = localStorage.getItem('merlin_free_trial_completed') === 'true'
+    if (!isLoggedIn && hasCompletedTrial) {
+      window.dispatchEvent(new CustomEvent('openLoginModal'))
+      throw new Error('무료 체험 1회가 완료되었습니다. 계속하려면 가입해주세요!')
+    }
+
+    const { data: parsed, usage } = await analyzeDocumentWithGPT(file)
     const newTx = buildPendingTxFromParsed({
       merchant: parsed.merchant,
       date: parsed.date,
@@ -1709,6 +1717,46 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     })
 
     await putLedgerLine(newTx)
+
+    // 2. 즉시 정산 (chargeDynamic)
+    const rawTokens = usage?.total_tokens || 0
+    const { chargeDynamic, markFreeTrialCompleted } = await import('../services/merlin-hub-sdk/react')
+    const userId = localStorage.getItem('merlin_user_id') || localStorage.getItem('merlin_family_uid')
+    
+    if (isLoggedIn && userId) {
+      // 회원
+      try {
+        await chargeDynamic({
+          userId,
+          videoId: documentId,
+          usageMetrics: { gpt4oMiniTokens: rawTokens },
+          requestId: `charge_vision_${documentId}_${Date.now()}`,
+          displayText: "문서 및 영수증 비전 분석",
+        })
+      } catch (err) {
+        console.error('실시간 동적 과금 실패:', err)
+      }
+    } else {
+      // 비회원 (최초 1회 실행 완료 처리)
+      const guestId = `trial_vision_${Date.now()}`
+      try {
+        const billingRes = await chargeDynamic({
+          userId: guestId,
+          videoId: documentId,
+          usageMetrics: { gpt4oMiniTokens: rawTokens },
+          requestId: `charge_vision_${documentId}_${Date.now()}`,
+          displayText: "무료 체험 비전 분석",
+        })
+        if (billingRes.success && billingRes.price) {
+          localStorage.setItem('pending_usage_fee', String(billingRes.price))
+          localStorage.setItem('pending_video_id', documentId)
+        }
+      } catch (err) {
+        console.error('게스트 동적 과금 실패:', err)
+      }
+      markFreeTrialCompleted()
+    }
+
     const categoryLocked = hasMeaningfulCategory(newTx)
     set((s) => ({
       transactions: [newTx, ...s.transactions],

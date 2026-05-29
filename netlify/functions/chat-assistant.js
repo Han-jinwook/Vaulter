@@ -387,7 +387,7 @@ function buildStructuredEntryUserContent(messages, userText) {
   return `최근 대화(같은 거래의 누락 정보 보완일 수 있음):\n${recent.join('\n')}\n\n마지막 사용자 발화:\n${latest}`.slice(0, 4000)
 }
 
-async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessages = []) {
+async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessages = [], usageTracker = null) {
   const today = todayIsoDate()
   const accounts = Array.isArray(dbContext?.accounts)
     ? dbContext.accounts.map((x) => String(x || '').trim()).filter(Boolean)
@@ -417,6 +417,9 @@ async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessa
   })
   if (!res.ok) return null
   const payload = await res.json()
+  if (usageTracker && payload?.usage?.total_tokens) {
+    usageTracker.total_tokens += payload.usage.total_tokens
+  }
   const content = payload?.choices?.[0]?.message?.content
   const parsed = parseJsonObjectStrict(content)
   return normalizeStructuredResult(parsed, today, categories, userText)
@@ -428,7 +431,7 @@ async function runStructuredEntryParser(apiKey, userText, dbContext, recentMessa
  * Step 2: 의미 기반 LLM 폴백(gpt-4o-mini, temperature 0.1, json_object) — 배열 앞줄 기계 폴백 없음
  * Step 3: 슬롯이 남으면 풀 내 고정 안전 쌍으로만 채움(통신 실패·파싱 실패·LLM이 2개를 못 줄 때 공통)
  */
-async function ensureCategoryCandidates(apiKey, structured, historyHints = [], latestUserText = '') {
+async function ensureCategoryCandidates(apiKey, structured, historyHints = [], latestUserText = '', usageTracker = null) {
   const summary = String(structured.extracted_data?.summary || '').trim()
   const memo = String(structured.extracted_data?.memo || '').trim()
   const amountRaw = structured.extracted_data?.amount
@@ -540,6 +543,9 @@ async function ensureCategoryCandidates(apiKey, structured, historyHints = [], l
         })
         if (!res.ok) break
         const payload = await res.json()
+        if (usageTracker && payload?.usage?.total_tokens) {
+          usageTracker.total_tokens += payload.usage.total_tokens
+        }
         const content = payload?.choices?.[0]?.message?.content
         const parsed = parseJsonObjectStrict(content)
         const arr = extractLlmCandidateArray(parsed)
@@ -631,7 +637,7 @@ function normalizeIntentName(rawIntent) {
   return 'chat'
 }
 
-async function runIntentRouter(apiKey, userText) {
+async function runIntentRouter(apiKey, userText, usageTracker = null) {
   const body = {
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
@@ -651,6 +657,9 @@ async function runIntentRouter(apiKey, userText) {
   })
   if (!res.ok) return { intent: 'chat', confidence: 0 }
   const payload = await res.json()
+  if (usageTracker && payload?.usage?.total_tokens) {
+    usageTracker.total_tokens += payload.usage.total_tokens
+  }
   const content = payload?.choices?.[0]?.message?.content
   const parsed = parseJsonObjectStrict(content)
   if (!parsed || typeof parsed !== 'object') return { intent: 'chat', confidence: 0 }
@@ -1234,21 +1243,23 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
     : null
 
   try {
+    const usageTracker = { total_tokens: 0 }
     let routedIntent = 'chat'
     let intentOverrideMessage = null
 
     // 1) 지기방 전용: LLM intent-router → create_entry만 Structured 게이트
     if (tailMessage?.role === 'user' && latestUserText) {
-      const route = await runIntentRouter(apiKey, latestUserText)
+      const route = await runIntentRouter(apiKey, latestUserText, usageTracker)
       routedIntent = route.intent || 'chat'
       intentOverrideMessage = buildIntentOverrideSystemMessage(routedIntent, latestUserText)
       if (route.intent === 'create_entry') {
-        const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext, trimmedMessages)
+        const structured = await runStructuredEntryParser(apiKey, latestUserText, dbContext, trimmedMessages, usageTracker)
         // 기록 의도로 라우팅된 턴은 반드시 "도구 호출 또는 누락 질문"으로만 종료한다.
         if (!structured || structured?.is_financial_data !== true) {
           return json(200, {
             type: 'reply',
             text: '거래 기록 요청으로 이해했어요. 금액·적요·날짜(오늘/어제 가능)와 결제수단(카드/현금/통장)을 알려 주세요.',
+            usage: { total_tokens: usageTracker.total_tokens },
           })
         }
         if (structured.is_complete !== true) {
@@ -1271,6 +1282,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
               structuredForEnsure,
               historyHintsForEnsure,
               latestUserText,
+              usageTracker,
             )
             return json(200, {
               type: 'category_confirm',
@@ -1289,6 +1301,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
                 account: d.account || '',
                 suggestedCategories: guaranteedCandidates,
               },
+              usage: { total_tokens: usageTracker.total_tokens },
             })
           }
           return json(200, {
@@ -1296,6 +1309,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
             text:
               String(structured.cfo_message || '').trim() ||
               '거래 기록을 위해 누락된 정보를 알려 주세요.',
+            usage: { total_tokens: usageTracker.total_tokens },
           })
         }
         const call = buildAddLedgerToolCallFromStructured(structured)
@@ -1307,6 +1321,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
             tool_calls: [call],
           },
           calls: [call],
+          usage: { total_tokens: usageTracker.total_tokens },
         })
       }
     }
@@ -1339,6 +1354,9 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
     }
 
     const data = await response.json()
+    if (data?.usage?.total_tokens) {
+      usageTracker.total_tokens += data.usage.total_tokens
+    }
     const choice = data.choices?.[0]
 
     if (!choice) {
@@ -1351,6 +1369,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
         type: 'tool_call',
         assistantMessage: choice.message,
         calls: choice.message.tool_calls,
+        usage: { total_tokens: usageTracker.total_tokens },
       })
     }
 
@@ -1358,6 +1377,7 @@ query_ledger 호출 시 위에 있는 **계정·(기존)카테고리**를 검색
     return json(200, {
       type: 'reply',
       text: choice.message?.content || '답변을 생성하지 못했습니다.',
+      usage: { total_tokens: usageTracker.total_tokens },
     })
   } catch (error) {
     return json(500, { error: error instanceof Error ? error.message : '서버 오류가 발생했습니다.' })

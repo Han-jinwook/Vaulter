@@ -180,7 +180,7 @@ export async function handler(event) {
       return json(502, { error: 'Failed to parse model JSON response', detail: content })
     }
 
-    return json(200, { ok: true, data })
+    return json(200, { ok: true, data, usage: parsed?.usage })
   } catch (error) {
     return json(500, {
       error: 'analyze-receipt exception',

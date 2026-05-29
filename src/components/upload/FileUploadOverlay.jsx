@@ -7,6 +7,7 @@ import { getGoogleIntegrationStatus } from '../../lib/googleIntegration'
 import { analyzeDocumentChunks } from '../../lib/visionAIEngine'
 import { buildDocumentChunks } from '../../lib/documentChunking'
 import { detectUploadFileKind, extractLocalDocument } from '../../lib/documentParsers'
+import { useHub } from '../../services/merlin-hub-sdk/react'
 
 const fileTypes = [
   { icon: 'picture_as_pdf', label: 'PDF', color: 'text-primary' },
@@ -17,6 +18,7 @@ const fileTypes = [
 
 export default function FileUploadOverlay() {
   const { closeUploadModal, openChatPanel } = useUIStore()
+  const { isLoggedIn } = useHub()
   const {
     isDragging,
     setDragging,
@@ -74,7 +76,7 @@ export default function FileUploadOverlay() {
         }
 
         setScanLabel(`문서 청크 분석 중: ${file.name} (${chunks.length}개)`)
-        const parsedItems = await analyzeDocumentChunks(chunks)
+        const { results: parsedItems } = await analyzeDocumentChunks(chunks)
         const inserted = await ingestDocumentAnalysisBatch(fakeDocumentId, file.name, parsedItems)
 
         if (!inserted.insertedCount) {
@@ -96,6 +98,13 @@ export default function FileUploadOverlay() {
   }
 
   const runParsingFlow = async (files = []) => {
+    const hasCompletedTrial = localStorage.getItem('merlin_free_trial_completed') === 'true'
+    if (!isLoggedIn && hasCompletedTrial) {
+      window.dispatchEvent(new CustomEvent('openLoginModal'))
+      window.alert('무료 체험 1회가 완료되었습니다. 계속하려면 가입해주세요!')
+      close()
+      return
+    }
     const selectedFiles = files.filter(Boolean)
     if (!selectedFiles.length) return
     try {
@@ -209,7 +218,16 @@ export default function FileUploadOverlay() {
                 내 기기에서 파일 선택
               </button>
               <button
-                onClick={() => setIsSheetPickerOpen(true)}
+                onClick={() => {
+                  const hasCompletedTrial = localStorage.getItem('merlin_free_trial_completed') === 'true'
+                  if (!isLoggedIn && hasCompletedTrial) {
+                    window.dispatchEvent(new CustomEvent('openLoginModal'))
+                    window.alert('무료 체험 1회가 완료되었습니다. 계속하려면 가입해주세요!')
+                    close()
+                    return
+                  }
+                  setIsSheetPickerOpen(true)
+                }}
                 className="bg-[#0F9D58] text-white py-4 px-8 rounded-full font-bold text-lg shadow-xl shadow-[#0F9D58]/20 hover:scale-105 transition-transform active:scale-95 flex items-center gap-3"
               >
                 <span className="material-symbols-outlined">table_chart</span>

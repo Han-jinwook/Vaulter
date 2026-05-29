@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { hubFetch } from '../CoreLogic/client';
 import { HubPaymentTrigger } from './HubPaymentTrigger';
 import { getConfig } from '../CoreLogic/config';
+import { useHub } from '../HubProvider';
 
 interface HistoryItem {
   id: number;
@@ -16,7 +17,26 @@ interface HistoryItem {
   display_text?: string;
   createdAt: string;
   created_at?: string;
+  app_id?: string;
 }
+
+const getAppDisplayName = (appId?: string) => {
+  if (!appId) return '어그로필터';
+  const id = appId.toUpperCase();
+  if (id === 'AGGROFILTER' || id === 'AGGRO_FILTER' || id === 'APP-01' || id === 'DEFAULT_APP') {
+    return '어그로필터';
+  }
+  if (id === 'VAULTER' || id === 'Vaulter') {
+    return '금고지기';
+  }
+  if (id === 'BES2') {
+    return 'Bes2';
+  }
+  if (id === 'WHATTOEAT') {
+    return '뭐먹지';
+  }
+  return appId;
+};
 
 interface HubPurchaseWidgetProps {
   appName?: string;
@@ -32,6 +52,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
   onError,
 }) => {
   const [redirectUrlParam, setRedirectUrlParam] = useState<string>(redirectUrl);
+  const { balance: hubBalance } = useHub();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -93,10 +114,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
 
     if (filterApp !== 'all') {
       result = result.filter(item => {
-        const rawDesc = item.display_text || item.description || '';
-        let formattedDesc = rawDesc.replace('(신규)', '').replace('KCP 심사관 테스트 코인 충전 (5,000C)', '코인 충전').trim();
-        if (!formattedDesc.startsWith(appName)) formattedDesc = `${appName} - ${formattedDesc}`;
-        const itemAppName = formattedDesc.split(' - ')[0];
+        const itemAppName = getAppDisplayName(item.app_id);
         return itemAppName === filterApp;
       });
     }
@@ -282,14 +300,18 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               </select>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
-              <div className="flex bg-slate-200/50 p-1 rounded-full w-fit">
-                <button onClick={() => setFilterType('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'all' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>전체</button>
-                <button onClick={() => setFilterType('charge')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'charge' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>충전</button>
-                <button onClick={() => setFilterType('use')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'use' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>사용</button>
+            <div className="grid grid-cols-3 items-center gap-3 mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100">
+              {/* 필터 타입 (왼쪽) */}
+              <div className="flex justify-start">
+                <div className="flex bg-slate-200/50 p-1 rounded-full w-fit">
+                  <button onClick={() => setFilterType('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'all' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>전체</button>
+                  <button onClick={() => setFilterType('charge')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'charge' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>충전</button>
+                  <button onClick={() => setFilterType('use')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterType === 'use' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>사용</button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* 앱 필터 (가운데) */}
+              <div className="flex justify-center items-center gap-2">
                 <span className="text-xs font-bold text-slate-500">앱</span>
                 <select
                   value={filterApp}
@@ -299,6 +321,18 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   <option value="all">모든 앱</option>
                   <option value={appName}>{appName}</option>
                 </select>
+              </div>
+
+              {/* 최종 잔액 (오른쪽) */}
+              <div className="flex justify-end items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-500">최종 잔액</span>
+                  <div className="px-2.5 h-8 min-w-[40px] rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shadow-sm">
+                    <span className="text-xs sm:text-sm font-black tabular-nums">
+                      {typeof hubBalance === 'number' ? `${hubBalance.toLocaleString()} C` : '…'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -317,17 +351,24 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               <div className="mt-4 divide-y divide-slate-100 max-h-[500px] overflow-y-auto pr-2">
                 {currentHistory.map((item) => {
                   const rawDesc = item.display_text || item.description || '';
-                  let formattedDesc = rawDesc
+                  const itemAppName = getAppDisplayName(item.app_id);
+                  let actionAndTitle = rawDesc
                     .replace('(신규)', '')
                     .replace('KCP 심사관 테스트 코인 충전 (5,000C)', '코인 충전')
                     .trim();
-                  if (!formattedDesc.startsWith(appName)) {
-                    formattedDesc = `${appName} - ${formattedDesc}`;
+
+                  // Strip app name prefix if it starts with it
+                  const prefix = `${itemAppName} -`;
+                  if (actionAndTitle.startsWith(prefix)) {
+                    actionAndTitle = actionAndTitle.substring(prefix.length).trim();
+                  } else if (actionAndTitle.startsWith(itemAppName)) {
+                    actionAndTitle = actionAndTitle.substring(itemAppName.length).trim();
                   }
 
-                  const parts = formattedDesc.split(' - ');
-                  const itemAppName = parts[0];
-                  const actionAndTitle = parts.slice(1).join(' - ');
+                  // Fallback if empty after stripping
+                  if (!actionAndTitle) {
+                    actionAndTitle = rawDesc;
+                  }
 
                   return (
                     <div key={item.id} className="border-b border-slate-100 py-3 hover:bg-slate-50/50 px-2 rounded-lg transition-colors">

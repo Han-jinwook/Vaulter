@@ -28,7 +28,11 @@ export async function getBalance(userId: string): Promise<{ success: boolean; ba
 export async function getPricing(videoId: string): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const config = getConfig();
-    const { ok, data } = await hubFetch<any>(`/api/wallet/pricing?app_id=${config.appId || 'DEFAULT_APP'}&action_type=ANALYSIS&resource_id=${videoId}`);
+    const appId = config.appId;
+    if (!appId) {
+      return { success: false, error: 'App ID가 설정되지 않았습니다. configureMerlinHub({ appId: "..." })를 호출해 주세요.' };
+    }
+    const { ok, data } = await hubFetch<any>(`/api/wallet/pricing?app_id=${appId}&action_type=ANALYSIS&resource_id=${videoId}`);
     if (!ok) return { success: false, error: data?.message || '단가 조회 실패' };
     return { success: true, data: data.data };
   } catch (err) {
@@ -45,8 +49,13 @@ export async function processTransaction(params: {
   amount: number;
   requestId: string;
   displayText: string;
+  usageMetadata?: any;
 }): Promise<{ success: boolean; balance?: number; error?: string }> {
   try {
+    const appId = getConfig().appId;
+    if (!appId) {
+      return { success: false, error: 'App ID가 설정되지 않았습니다. configureMerlinHub({ appId: "..." })를 호출해 주세요.' };
+    }
     const { ok, data } = await hubFetch<any>('/api/wallet/transaction', {
       method: 'POST',
       body: JSON.stringify({
@@ -55,7 +64,8 @@ export async function processTransaction(params: {
         request_id: params.requestId,
         transaction_type: params.amount < 0 ? 'SPEND' : 'CHARGE',
         display_text: params.displayText,
-        app_id: getConfig().appId || 'DEFAULT_APP'
+        app_id: appId,
+        usage_metadata: params.usageMetadata
       }),
     });
     if (!ok) return { success: false, error: data?.message || '트랜잭션 처리 실패' };
@@ -72,20 +82,39 @@ export async function processTransaction(params: {
 export async function chargeDynamic(params: {
   userId: string;
   videoId: string;
-  rawCost: number;
+  rawCost?: number;
+  usageMetrics?: {
+    gpt4oMiniTokens?: number;
+    gemini25FlashTokens?: number;
+    googleSearchCount?: number;
+    speedTokens?: number; // 하위 호환
+    fullTokens?: number;  // 하위 호환
+    [key: string]: any;
+  };
   requestId: string;
   displayText: string;
+  usageMetadata?: any;
 }): Promise<{ success: boolean; balance?: number; error?: string; price?: number }> {
   try {
+    const appId = getConfig().appId;
+    if (!appId) {
+      return { success: false, error: 'App ID가 설정되지 않았습니다. configureMerlinHub({ appId: "..." })를 호출해 주세요.' };
+    }
     const { ok, data } = await hubFetch<any>('/api/wallet/transaction/dynamic', {
       method: 'POST',
       body: JSON.stringify({
         userId: params.userId,
-        app_id: getConfig().appId || 'DEFAULT_APP',
+        app_id: appId,
         resource_id: params.videoId,
         raw_cost: params.rawCost,
+        usage_metrics: params.usageMetrics ? {
+          gpt_4o_mini_tokens: params.usageMetrics.gpt4oMiniTokens || params.usageMetrics.speedTokens,
+          gemini_2_5_flash_tokens: params.usageMetrics.gemini25FlashTokens || params.usageMetrics.fullTokens,
+          google_search_count: params.usageMetrics.googleSearchCount
+        } : undefined,
         request_id: params.requestId,
-        display_text: params.displayText
+        display_text: params.displayText,
+        usage_metadata: params.usageMetadata
       }),
     });
     if (!ok) return { success: false, error: data?.message || '동적 과금 처리 실패' };
@@ -132,13 +161,17 @@ export async function requestKcpPayment(params: {
 }): Promise<{ success: boolean; paymentData?: any; error?: string }> {
   try {
     const config = getConfig();
+    const appId = config.appId;
+    if (!appId) {
+      return { success: false, error: 'App ID가 설정되지 않았습니다. configureMerlinHub({ appId: "..." })를 호출해 주세요.' };
+    }
     const { ok, data } = await hubFetch<any>('/api/payment/prepare', {
       method: 'POST',
       body: JSON.stringify({
         amount: params.amount,
         coin_amount: params.coinAmount,
         pay_method_type: params.payMethodType,
-        app_id: config.appId || 'DEFAULT_APP',
+        app_id: appId,
         return_url: params.returnUrl
       }),
     });

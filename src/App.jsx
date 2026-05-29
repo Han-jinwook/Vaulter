@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
-import { useHub } from './services/merlin-hub-sdk/react'
+import { useHub, HubBenefitModal } from './services/merlin-hub-sdk/react'
 import TopNavBar from './components/layout/TopNavBar'
 import AIChatPanel from './components/chat/AIChatPanel'
 import AssetChatPanel from './components/chat/AssetChatPanel'
@@ -434,6 +434,11 @@ function AppShell() {
           }}
         />
       )}
+      <HubBenefitModal
+        customBenefitTitle="실시간 재무 분석 & 자산 추적"
+        customBenefitDesc="가계부 원장과 계정 상태 분석, 자산 포트폴리오를 실시간 동기화"
+        customBenefitIcon="📊"
+      />
     </div>
   )
 }

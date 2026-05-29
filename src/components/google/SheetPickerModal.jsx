@@ -73,10 +73,11 @@ export default function SheetPickerModal({ isOpen, onClose }) {
         setProgressTotal(chunks.length)
         setProgressLabel(`AI 분석 중... (0 / ${chunks.length} 청크)`)
 
-        items = await analyzeDocumentChunks(chunks, (completed, total) => {
+        const { results: chunkResults } = await analyzeDocumentChunks(chunks, (completed, total) => {
           setProgressCurrent(completed)
           setProgressLabel(`AI 분석 중... (${completed} / ${total} 청크)`)
         })
+        items = chunkResults
       }
 
       const docId = `gsheet-${sheet.id}-${Date.now()}`

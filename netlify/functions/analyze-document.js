@@ -183,5 +183,6 @@ export async function handler(event) {
   return json(200, {
     ok: true,
     items: items.map((item, index) => normalizeItem(item, sourceName, index)).filter((item) => item.amount > 0),
+    usage: openAiPayload?.usage,
   })
 }

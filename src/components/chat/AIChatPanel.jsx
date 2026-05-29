@@ -1054,6 +1054,15 @@ export default function AIChatPanel() {
   // ─── AI 채팅 멀티턴 루프 ───────────────────────────────────────────────────
   const executeAiChat = useCallback(
     async (userText) => {
+      // 비회원 체크
+      const isLoggedIn = localStorage.getItem('merlin_session_token') || localStorage.getItem('merlin_user_id')
+      const hasCompletedTrial = localStorage.getItem('merlin_free_trial_completed') === 'true'
+      if (!isLoggedIn && hasCompletedTrial) {
+        window.dispatchEvent(new CustomEvent('openLoginModal'))
+        window.alert('무료 체험 1회가 완료되었습니다. 계속하려면 가입해주세요!')
+        return
+      }
+
       // 1) 유저 메시지 UI 추가 + 히스토리에 기록
       addChatMessage({ role: 'user', type: 'text', text: userText })
       conversationRef.current.push({ role: 'user', content: userText })
@@ -1062,6 +1071,8 @@ export default function AIChatPanel() {
 
       setIsThinking(true)
       setThinkingLabel('생각하는 중...')
+
+      let totalTokensAccumulated = 0
 
       try {
         let safetyBreaker = 0
@@ -1105,6 +1116,9 @@ export default function AIChatPanel() {
           }
 
           const data = await res.json()
+          if (data?.usage?.total_tokens) {
+            totalTokensAccumulated += data.usage.total_tokens
+          }
 
           // 2) GPT가 Tool Call을 요청한 경우 → 로컬에서 실행
           if (data.type === 'tool_call') {
@@ -1226,6 +1240,44 @@ export default function AIChatPanel() {
 
           throw new Error('알 수 없는 응답 형식입니다.')
         }
+
+        // 과금 처리 (chargeDynamic)
+        const { chargeDynamic, markFreeTrialCompleted } = await import('../../services/merlin-hub-sdk/react')
+        const userId = localStorage.getItem('merlin_user_id') || localStorage.getItem('merlin_family_uid')
+        const resourceId = `chat_${Date.now()}`
+
+        if (isLoggedIn && userId) {
+          try {
+            await chargeDynamic({
+              userId,
+              videoId: resourceId,
+              usageMetrics: { gpt4oMiniTokens: totalTokensAccumulated },
+              requestId: `charge_chat_${resourceId}_${Date.now()}`,
+              displayText: "AI 채팅 비서 이용",
+            })
+          } catch (err) {
+            console.error('AI 채팅 실시간 동적 과금 실패:', err)
+          }
+        } else {
+          const guestId = `trial_chat_${Date.now()}`
+          try {
+            const billingRes = await chargeDynamic({
+              userId: guestId,
+              videoId: resourceId,
+              usageMetrics: { gpt4oMiniTokens: totalTokensAccumulated },
+              requestId: `charge_chat_${resourceId}_${Date.now()}`,
+              displayText: "무료 체험 AI 채팅 이용",
+            })
+            if (billingRes.success && billingRes.price) {
+              localStorage.setItem('pending_usage_fee', String(billingRes.price))
+              localStorage.setItem('pending_video_id', resourceId)
+            }
+          } catch (err) {
+            console.error('게스트 AI 채팅 동적 과금 실패:', err)
+          }
+          markFreeTrialCompleted()
+        }
+
       } catch (error) {
         const msg = error instanceof Error ? error.message : '답변 중 오류가 발생했습니다.'
         addChatMessage({ role: 'ai', type: 'text', text: `죄송합니다. ${msg}` })
