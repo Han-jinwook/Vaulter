@@ -1726,15 +1726,18 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     if (isLoggedIn && userId) {
       // 회원
       try {
-        await chargeDynamic({
-          userId,
-          videoId: documentId,
-          usageMetrics: { gpt4oMiniTokens: rawTokens },
-          requestId: `charge_vision_${documentId}_${Date.now()}`,
-          displayText: "문서 및 영수증 비전 분석",
-        })
+        await fetch('/api/session-billing/accumulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            gpt4oMiniTokens: rawTokens,
+            detailLog: { action: "문서 및 영수증 비전 분석", tokens: rawTokens }
+          })
+        }).catch(() => {})
+        window.dispatchEvent(new CustomEvent('vaulterActiveSessionAction'))
       } catch (err) {
-        console.error('실시간 동적 과금 실패:', err)
+        console.error('비전 분석 누적 과금 요청 실패:', err)
       }
     } else {
       // 비회원 (최초 1회 실행 완료 처리)

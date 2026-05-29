@@ -377,7 +377,21 @@ export interface HubLogoutCardProps {
 export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, className = '' }) => {
   const { isLoggedIn } = useHub();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // 로그아웃 시점에 누적된 세션 billing이 있다면 정산 flush 진행
+    const userId = localStorage.getItem('merlin_user_id') || localStorage.getItem('merlin_family_uid');
+    if (userId) {
+      try {
+        await fetch('/api/session-billing/flush', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        }).catch(() => {});
+      } catch (err) {
+        console.error('[SessionBilling] 로그아웃 전 정산 시도 실패:', err);
+      }
+    }
+
     fetch('/api/auth/logout', { method: 'POST' })
       .catch(() => {})
       .finally(() => {

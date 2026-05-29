@@ -1248,15 +1248,19 @@ export default function AIChatPanel() {
 
         if (isLoggedIn && userId) {
           try {
-            await chargeDynamic({
-              userId,
-              videoId: resourceId,
-              usageMetrics: { gpt4oMiniTokens: totalTokensAccumulated },
-              requestId: `charge_chat_${resourceId}_${Date.now()}`,
-              displayText: "AI 채팅 비서 이용",
-            })
+            await fetch('/api/session-billing/accumulate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId,
+                gpt4oMiniTokens: totalTokensAccumulated,
+                detailLog: { action: "AI 채팅 비서 이용", tokens: totalTokensAccumulated }
+              })
+            }).catch(() => {})
+            // 클라이언트 사이드에서 타이머를 갱신할 수 있도록 사용자 활동 이벤트 디스패치
+            window.dispatchEvent(new CustomEvent('vaulterActiveSessionAction'))
           } catch (err) {
-            console.error('AI 채팅 실시간 동적 과금 실패:', err)
+            console.error('AI 채팅 누적 과금 요청 실패:', err)
           }
         } else {
           const guestId = `trial_chat_${Date.now()}`

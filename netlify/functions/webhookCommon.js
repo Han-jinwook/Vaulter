@@ -10,6 +10,7 @@ export const CORS = {
 }
 
 export const STORE_NAME = 'webhook-ledger-inbox'
+export const BILLING_STORE_NAME = 'vaulter-billing-buffer'
 export const AUTH_PREFIX = 'auth/'
 export const QUEUE_PREFIX = 'q/'
 

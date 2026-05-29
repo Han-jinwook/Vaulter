@@ -71,6 +71,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/session-billing/*"
+  to = "/.netlify/functions/session-billing"
+  status = 200
+
+[[redirects]]
   from = "/api/auth/*"
   to = "https://os.sundreamer.app/api/auth/:splat"
   status = 200

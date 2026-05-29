@@ -293,6 +293,62 @@ function AppShell() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
+  // 30분 버퍼형 세션 타이머 및 마운트 시 기동 플러시 제어
+  useEffect(() => {
+    const userId = localStorage.getItem('merlin_user_id') || localStorage.getItem('merlin_family_uid')
+    if (!userId) return
+
+    const flushBillingSession = async () => {
+      try {
+        const res = await fetch('/api/session-billing/flush', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        })
+        const data = await res.json()
+        if (data.ok && data.price > 0) {
+          console.info('[SessionBilling] 30분 무활동 세션 통합 정산 완료. 차감액:', data.price, '남은 잔액:', data.balance)
+        }
+      } catch (err) {
+        console.error('[SessionBilling] 세션 정산 실패:', err)
+      }
+    }
+
+    // 1. 기동 시점 체크: 이전 활동 기준 30분이 넘었으면 즉시 플러시
+    const lastActiveStr = localStorage.getItem('vaulter_billing_last_active')
+    if (lastActiveStr) {
+      const elapsed = Date.now() - Number(lastActiveStr)
+      if (elapsed >= 30 * 60 * 1000) {
+        flushBillingSession()
+      }
+    }
+
+    // 2. 무활동 30분 감시 타이머 루프
+    let timerId = setInterval(() => {
+      const activeStr = localStorage.getItem('vaulter_billing_last_active')
+      if (activeStr) {
+        const elapsed = Date.now() - Number(activeStr)
+        if (elapsed >= 30 * 60 * 1000) {
+          // 30분 초과 시 즉시 플러시 진행 후 기록 초기화
+          localStorage.removeItem('vaulter_billing_last_active')
+          flushBillingSession()
+        }
+      }
+    }, 30_000) // 30초마다 검사
+
+    // 3. AI 액션 수행 시 수신할 이벤트 핸들러 등록
+    const handleActiveAction = () => {
+      localStorage.setItem('vaulter_billing_last_active', String(Date.now()))
+    };
+
+    window.addEventListener('vaulterActiveSessionAction', handleActiveAction)
+
+    return () => {
+      clearInterval(timerId)
+      window.removeEventListener('vaulterActiveSessionAction', handleActiveAction)
+    }
+  }, [])
+
   useEffect(() => {
     if (isHubLoading || !isBackupStatusLoaded) return
 
