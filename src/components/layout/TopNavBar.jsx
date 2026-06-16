@@ -2,7 +2,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useUIStore } from '../../stores/uiStore'
 import { HubProfileWidget, HubAuthModal, useHub } from '../../services/merlin-hub-sdk/react'
-import { HubAppSwitcher } from '../../services/merlin-hub-sdk/Navigation/HubAppSwitcher'
 
 const navItems = [
   { path: '/', desktopLabel: '지기(Keeper)', mobileLabel: '지기' },
@@ -75,7 +74,7 @@ export default function TopNavBar() {
             {isLoggedIn && (
               <Link
                 to="/p-wallet"
-                className="hidden md:flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200/60 text-amber-800 font-bold text-xs transition-colors shrink-0 shadow-sm"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200/60 text-amber-800 font-bold text-xs transition-colors shrink-0 shadow-sm"
               >
                 <span className="material-symbols-outlined text-[14px] font-bold text-amber-600">payments</span>
                 <span>{balance !== null ? balance.toLocaleString() : '0'} C</span>
@@ -86,17 +85,13 @@ export default function TopNavBar() {
               <span className="material-symbols-outlined">notifications</span>
             </button>
 
-            {/* 프로필과 패밀리 앱 스위처(F)를 바짝 붙인 그룹 */}
-            <div className="flex items-center bg-slate-50/50 rounded-2xl p-1 border border-slate-100/50">
-              <HubProfileWidget 
-                onLoginClick={openHubAuthModal}
-                onProfileClick={() => navigate('/p-settings')}
-                showNickname={false}
-              />
-              <div className="ml-2">
-                <HubAppSwitcher currentAppId="vaulter" joinedAppIds={[]} />
-              </div>
-            </div>
+            {/* 허브 통합 프로필 위젯 */}
+            <HubProfileWidget 
+              onLoginClick={openHubAuthModal}
+              onProfileClick={() => navigate('/p-settings')}
+              showNickname={false}
+              className="ml-1"
+            />
           </div>
         </div>
 
